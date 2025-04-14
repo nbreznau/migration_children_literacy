@@ -1,0 +1,1016 @@
+---
+title: "Zielgruppenkompetenzen: PIAAC Bericht"
+author: "Nate Breznau"
+subtitle: 'Grundbildungspfade'
+
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    toc_depth: 1
+---
+
+
+   
+
+```{r setup, echo = F, warning = F, message = F}
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+packages <- c('tidyverse',
+              'readr',
+              'here',
+              'ggplot2',
+              'kableExtra')
+
+pacman::p_load(packages, character.only = T)
+
+# function for weighted mean
+weighted_mean <- function(var, weights) {
+  sum(var * weights, na.rm = TRUE) / sum(weights[!is.na(var)], na.rm = TRUE)
+}
+
+colors3 <- c("#3b528b", "#21918c", "#5ec962")
+colors4 <- c("#414487", "#2a788e", "#5ec962", "#fde725")
+
+```
+
+## Data
+
+Die Daten stammen aus den ersten beiden Zyklen von PIAAC. Die Dateien zum Importieren und Bereinigen der Daten liegen im Ordner /PIAAC_VET_Basics.
+
+Diese Studie war untestutzt von mein [PIAAC Variable Finder](https://nate-breznau.shinyapps.io/PIAAC_Variable_Finder/) app.
+
+Hinweiss: A2_Q04aDEX "Und wie ist es mit der deutschen Sprache: 
+Responses:  01: Wie gut sprechen Sie Deutsch? | 02: Wie gut schreiben Sie auf Deutsch? | 03: Wie gut lesen Sie auf Deutsch?" ist nicht im PUF (Public Use File)
+
+```{r data}
+#df <- read_csv(here::here("Data", "piaac_combined.csv"), show_col_types = F) %>%
+#  subset(CNTRYID == 276)
+
+#df2 <- read_csv(here::here("Data", "piaac_combined_2.csv"), show_col_types = F) %>%
+#  subset(CNTRYID == 276)
+
+# those commands take very long to load all countries, shortcut to here
+#df <- df %>%
+#  rowwise() %>%
+#  mutate(skill_reading = mean(c_across(starts_with("PVLIT")), na.rm = #TRUE),
+#         skill_numeracy = mean(c_across(starts_with("PVNUM")), na.rm = #TRUE)) %>%
+#  ungroup()
+
+#df2 <- df2 %>%
+#  rowwise() %>%
+#  mutate(skill_reading = mean(c_across(starts_with("PVLIT")), na.rm = #TRUE),
+#         skill_numeracy = mean(c_across(starts_with("PVNUM")), na.rm = #TRUE),
+#         skill_adaptive_prob_solving = #mean(c_across(starts_with("PVAPS")), na.rm = TRUE)) %>%
+#  ungroup()
+
+#write_csv(df, here("Data", "piaac_de.csv"))
+#write_csv(df2, here("Data", "piaac_de_2.csv"))
+
+
+df <- read_csv(here("Data", "piaac_de.csv")) 
+df2 <- read_csv(here("Data", "piaac_de_2.csv"))
+
+
+
+df <- df %>%
+  mutate(
+    literacy_level = case_when(
+      skill_reading < 176 ~ 0,
+      skill_reading < 226 ~ 1,
+      skill_reading < 276 ~ 2,
+      skill_reading < 326 ~ 3,
+      skill_reading > 325 ~ 4,
+      TRUE ~ NA_real_
+    ),
+    numeracy_level = case_when(
+      skill_numeracy < 176 ~ 0,
+      skill_numeracy < 226 ~ 1,
+      skill_numeracy < 276 ~ 2,
+      skill_numeracy < 326 ~ 3,
+      skill_numeracy > 325 ~ 4,
+      TRUE ~ NA_real_
+    )
+  )
+
+df2 <- df2 %>%
+  mutate(
+    literacy_level = case_when(
+      skill_reading < 176 ~ 0,
+      skill_reading < 226 ~ 1,
+      skill_reading < 276 ~ 2,
+      skill_reading < 326 ~ 3,
+      skill_reading > 325 ~ 4,
+      TRUE ~ NA_real_
+    ),
+    numeracy_level = case_when(
+      skill_numeracy < 176 ~ 0,
+      skill_numeracy < 226 ~ 1,
+      skill_numeracy < 276 ~ 2,
+      skill_numeracy < 326 ~ 3,
+      skill_numeracy > 325 ~ 4,
+      TRUE ~ NA_real_
+    )
+  )
+
+
+
+```
+
+
+
+
+
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Deutsch als Zweitsprache, gering Qualifizierter
+
+**GrundBildungsBrücken Hamburg (GBHH)**
+
+Einwanderer mit ISCED 1/2, Deutsch als Zweitsprache.
+
+### Table 1. Bestimmt Einwanderer Bevölkerungsstatistik
+
+```{r g01}
+
+df <- df %>%
+  mutate(group_01 = case_when(BORNLANG == 4 & EDCAT7 < 3 ~ 2,
+                              BORNLANG == 1 & EDCAT7 < 3 ~ 1,
+                              EDCAT7 > 2 ~ 0,
+                              .default = NA)) %>%
+  as.data.frame()
+
+df2 <- df2 %>%
+  mutate(group_01 = case_when(BORNLANG == 4 & EDCAT7_TC1 < 3 ~ 2,
+                              BORNLANG == 1 & EDCAT7_TC1 < 3 ~ 1,
+                              EDCAT7_TC1 > 2 ~ 0,
+                              .default = NA)) %>%
+  as.data.frame()
+
+df_summary <- df %>%
+  subset(!is.na(group_01 )) %>%
+  group_by(group_01) %>%
+  summarise(
+    skill_reading = weighted_mean(skill_reading, SPFWT0),
+    skill_numeracy = weighted_mean(skill_numeracy, SPFWT0)
+  ) %>%
+  mutate(wave = "Zy1 (~2012)")
+
+
+df2_summary <- df2 %>%
+  subset(!is.na(group_01)) %>%
+  group_by(group_01) %>%
+  summarise(
+    skill_reading = weighted_mean(skill_reading, SPFWT0),
+    skill_numeracy = weighted_mean(skill_numeracy, SPFWT0)
+  ) %>%
+  mutate(wave = "Zy2 (~2022)")
+
+# Combine 
+df_combined <- bind_rows(df_summary, df2_summary) %>%
+  pivot_longer(cols = c(skill_reading, skill_numeracy), 
+               names_to = "Skill", 
+               values_to = "Average")
+
+group_01_population <- df2 %>%
+  group_by(group_01) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2022)
+
+group_01_population1 <- df %>%
+  group_by(group_01) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2012)
+
+group_01_pop <- bind_rows(group_01_population, group_01_population1)
+
+group_01_pop <- group_01_pop %>%
+  mutate(label = case_when(group_01 == 2 ~ "Einwanderer, Deutsch 2.Sprache, ISCED < 3",
+                           group_01 == 1 ~ "In Deutschl. geb.,Deutsch 1.Sprache, ISCED < 3",
+                           group_01 == 0 ~ "ISCED = 3+",
+                           .default = "Other"))
+
+rm(group_01_population, group_01_population1)
+
+group_01_pop <- group_01_pop %>%
+  select(label, year, weighted_count, percent) %>%
+  mutate(percent = round(percent, 1))
+
+
+kable(group_01_pop, caption = "Table 1. Bevölkerungsstatistik, 16 bis 65, Deutschland<br> <small>Zielgruppe: Einwanderer mit ISCED 1/2, Deutsch als Zweitsprache</small>",
+      col.names = c("Gruppe", "Jahr", "Einwohnerzahl", "Prozent"))
+
+```
+
+
+### Figure 1. Einwanderern mit Deutsch als Zweitsprache Kompetenzen
+
+Ein Vergleich der Kompetenzen von Einwanderern mit Deutsch als Zweitsprache und gering formaler Bildung (ISCED 1 oder 2, keine oder nur geringe Sekundarschulbildung) zeigt, dass die Rechen- und Lesekompetenz seit 2012 zurückgegangen ist, insbesondere die Lesekompetenz. Während ähnlich gebildete gebürtige Deutsche mit Deutsch als Muttersprache viel höhere Kompetenzen aufweisen und diese seit 2012 im Durchschnitt gestiegen sind - sie liegen nicht so weit hinter denen mit höherer formaler Bildung.
+
+```{r g01_plot}
+
+ggplot(df_combined, aes(x = wave, y = Average, fill = factor(group_01))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Skill, scales = "free_y", labeller = labeller(Skill = c(skill_numeracy = "Rechenkompetenz", skill_reading = "Lesekompetenz"))) +
+  labs(title = "Kompetenz nach formaler Bildung und Hintergrund",
+       x = "PIAAC Zyklus",
+       y = "Durchschnittliches\nKompetenzniveau\n(bevölkerungsgewichtet)") +
+  scale_fill_manual(values = colors3, 
+                    labels = c("Alle,\nISCED 3+\n ", 
+                               "Deutschl. geb.,\nDeutsch 1.Sprache,\nISCED < 3", 
+                               "Ausland geb.,\nDeutsch 2.Sprache,\nISCED < 3")) +
+  coord_cartesian(ylim = c(150, 300)) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        axis.title.y = element_text(size = rel(0.9))
+        )
+
+```
+
+```{r fig1en}
+
+agg_png(here("Results", "Fig1en.png"), res = 144, height = 600, width = 800)
+
+df_combined <- df_combined %>%
+  mutate(waveen = ifelse(wave == "Zy1 (~2012)", "Cy1 (~2012)", "Cy2 (~2022)"))
+  
+ggplot(df_combined, aes(x = waveen, y = Average, fill = factor(group_01))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Skill, scales = "free_y", labeller = labeller(Skill = c(skill_numeracy = "Numeracy", skill_reading = "Literacy"))) +
+  labs(title = "Skills by Formal Education and Migration Background",
+       x = "PIAAC Cycle",
+       y = "Avg. Skill Level\n(Population weighted)") +
+  scale_fill_manual(values = colors3, 
+                    labels = c("All,\nISCED 3+\n ", 
+                               "German-born,\nGerman 1st Lang.,\nISCED < 3", 
+                               "Foreign-born,\nGerman 2nd Lang.,\nISCED < 3")) +
+  coord_cartesian(ylim = c(150, 300)) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        axis.title.y = element_text(size = rel(0.9))
+        )
+
+dev.off()
+
+#include_graphics(here("Results", "Fig1en.png"))
+
+```
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Gering lit. Erwachsene, die i.d. Pflegehilfe eine Ausbildung machen möchten
+
+**Grundbildung in der Pflege stärken (GriPs)**
+
+Nicht genau identifizierbar. Wir können nur Leute die gerade in Bildung oder Weiterbildung sind, und ,Gesundheit' studieren.
+
+
+
+
+
+
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Langzeitarbeitslose, gering lit.
+
+**Berliner Kooperations-verbund Arbeits-orientierte GB (BerKo) **
+
+Bundesrepublik Definition von Langzeitarbeitslos ist 12 Monate.
+
+Wir können Arbeitslosigkeit seit 5 Jahren identifizieren, wo 3 bis 5 von den letzen 5 Jahren Arbeitslos war (Antwortkategorie 4). Und das ist nur in Zyklus 2 vom PIAAC (neue Frage)
+
+
+```{r g03}
+df2 <- df2 %>%
+  mutate(group_03_long = case_when(C2_Q08b == 4 ~ 1,
+                              C2_Q08b != 4 ~ 0,
+                              .default = NA),
+         group_03_12mo = case_when(C2_Q09b == 2 & C2_Q07 == 3 ~ 1, # no paid work last 12 months, subj. unemployed
+                                   .default = 0),
+         FORBORN = case_when(BORNLANG == 1 | BORNLANG == 2 ~ 0,
+                             BORNLANG == 3 | BORNLANG == 4 ~ 1,
+                             .default = NA),
+         skill_reading_cat5 = ntile(skill_reading, 5))
+
+df <- df %>%
+  mutate(group_03_12mo = case_when(C_Q08b == 2 & C_Q07 == 3 ~ 1, # no paid work last 12 months, subj. unemployed
+                                   .default = 0),
+         FORBORN = case_when(BORNLANG == 1 | BORNLANG == 2 ~ 0,
+                             BORNLANG == 3 | BORNLANG == 4 ~ 1,
+                             .default = NA),
+         skill_reading_cat5 = ntile(skill_reading, 5))
+
+
+# summarize
+g03sum_long <- df2 %>%
+  subset(!is.na(group_03_long)) %>%
+  group_by(group_03_long) %>%
+  summarise(
+    skill_reading = weighted_mean(skill_reading, SPFWT0),
+    skill_numeracy = weighted_mean(skill_numeracy, SPFWT0)
+  ) %>%
+  mutate(wave = "Zy2 (~2022)")
+
+g03sum_12mo <- df2 %>%
+  subset(!is.na(group_03_12mo)) %>%
+  group_by(group_03_12mo) %>%
+  summarise(
+    skill_reading = weighted_mean(skill_reading, SPFWT0),
+    skill_numeracy = weighted_mean(skill_numeracy, SPFWT0)
+  ) %>%
+  mutate(wave = "Zy2 (~2022)")
+
+
+g03sum_12mo_1 <- df %>%
+  subset(!is.na(group_03_12mo)) %>%
+  group_by(group_03_12mo) %>%
+  summarise(
+    skill_reading = weighted_mean(skill_reading, SPFWT0),
+    skill_numeracy = weighted_mean(skill_numeracy, SPFWT0)
+  ) %>%
+  mutate(wave = "Zy1 (~2012)")
+
+g03sumfb <- df2 %>%
+  subset(!is.na(group_03_12mo) & !is.na(FORBORN)) %>%
+  group_by(group_03_12mo, FORBORN) %>%
+  summarise(
+    skill_reading = weighted_mean(skill_reading, SPFWT0),
+    skill_numeracy = weighted_mean(skill_numeracy, SPFWT0)
+  ) %>%
+  mutate(wave = "Zy2 (~2022)")
+
+g03cat5_2022 <- df2 %>%
+  subset(!is.na(group_03_12mo)) %>%
+  group_by(group_03_12mo, skill_reading_cat5) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE), .groups = "drop") %>%
+  group_by(group_03_12mo) %>%
+  mutate(percent = weighted_count / sum(weighted_count) * 100,
+         skill_reading_cat5 = factor(skill_reading_cat5, 
+                                     levels = c(1, 2, 3, 4, 5), 
+                                     labels = c("am\nniedrigsten", "niedrig", "durch\nschnittlich", "hoch", "am\nhöchsten")),
+         year = 2022)
+
+g03cat5_2012 <- df %>%
+  subset(!is.na(group_03_12mo) & !is.na(skill_reading_cat5)) %>%
+  group_by(group_03_12mo, skill_reading_cat5) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE), .groups = "drop") %>%
+  group_by(group_03_12mo) %>%
+  mutate(percent = weighted_count / sum(weighted_count) * 100,
+         skill_reading_cat5 = factor(skill_reading_cat5, 
+                                     levels = c(1, 2, 3, 4, 5), 
+                                     labels = c("am\nniedrigsten", "niedrig", "durch\nschnittlich", "hoch", "am\nhöchsten")),
+         year = 2012)
+
+## Population
+
+g03cat5 <- rbind(g03cat5_2022, g03cat5_2012)
+
+rm(g03cat5_2022, g03cat5_2012)
+
+group_03_population <- df2 %>%
+  group_by(group_03_12mo) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2022)
+
+group_03_population1 <- df %>%
+  group_by(group_03_12mo) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2012)
+
+group_03_pop <- bind_rows(group_03_population, group_03_population1)
+
+group_03_pop <- group_03_pop %>%
+  mutate(label = case_when(group_03_12mo == 1 ~ "Langzeitarbeitslos, 12mo+",
+                           group_03_12mo == 0 ~ "Nicht Langzeitarbeitslos",
+                           .default = "Other"))
+
+rm(group_03_population, group_03_population1)
+
+group_03_pop <- group_03_pop %>%
+  select(label, year, weighted_count, percent) %>%
+  mutate(percent = round(percent, 1))
+```
+
+### Table 2. Langzeitarbeitslos
+
+```{r g03table}
+kable(group_03_pop, caption = "Table 2. Bevölkerungsstatistik, 16 bis 65, Deutschland<br> <small>Zielgruppe: Langzeitarbeitslose (mind. 12 mo.)",
+      col.names = c("Gruppe", "Jahr", "Einwohnerzahl", "Prozent"))
+
+```
+
+### Figure 2. Kompetenzverteilung Langzeitarbeitslos
+
+```{r g03dist2022}
+
+g03cat5 %>%
+  subset(year == 2022) %>%
+ggplot(aes(x = skill_reading_cat5, y = percent, fill = as.factor(group_03_12mo))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c(colors3[1], colors3[3]), labels = c("Nein", "Ja (12 mo.)")) +
+  labs(title = "Lesekompetenz Langzeitarbeitslos",
+       subtitle = "PIAAC Zyklus 2, Deutschland 2022",
+       x = "Lesekompetenz Kategorie", 
+       y = "Prozent der Gruppe", 
+       fill = "Langzeit-\narbeitslos") +
+  ylim(0,63) +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8))
+
+
+```
+
+
+```{r g03dist2012}
+
+g03cat5 %>%
+  subset(year == 2012) %>%
+ggplot(aes(x = skill_reading_cat5, y = percent, fill = as.factor(group_03_12mo))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c(colors3[1], colors3[3]), labels = c("Nein", "Ja (12 mo.)")) +
+  labs(title = "Lesekompetenz Langzeitarbeitslos",
+       subtitle = "PIAAC Zyklus 1, Deutschland 2012",
+       x = "Lesekompetenz Kategorie", 
+       y = "Prozent der Gruppe", 
+       fill = "Langzeit-\narbeitslos") +
+  ylim(0,63) +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8))
+
+
+```
+
+
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Azubis, gering Literalität
+
+**Berliner Kooperations-verbund Arbeits-orientierte GB (BerKo) **
+
+Diese Gruppe ist nur annähernd. Wir erfassen diejenigen, die ISCED 3 noch nicht abgeschlossen haben. Und dann sind sie entweder 24 Jahre oder jünger und haben den Status „in Arbeit und Ausbildung“ oder den Status „ISCED 3 abgeschlossen oder befindet sich noch in Ausbildung, 16 bis 24 Jahre alt“ und den Status „in Arbeit und Ausbildung“. Dabei fehlen die über 25-Jährigen und schließen wahrscheinlich auch einige ein, die andere Bildungsformen als eine Berufsausbildung anstreben.
+
+### Table 3. Bevölkerungsstatistik Azubis
+
+```{r g04}
+
+df2 <- df2 %>%
+  mutate(group_04 = case_when(AGEG10LFS == 1 & EDWORKC2 == 2 & EDCAT7_TC1 < 3 ~ 1,
+                              LEAVER1624C2 == 0 & EDWORKC2 == 2 & EDCAT7_TC1 < 3 ~ 1,
+                              AGEG10LFS != 1 & EDWORKC2 != 2 ~ 0,
+                              LEAVER1624C2 != 0 & EDWORKC2 != 2 ~ 0,
+                              is.na(EDWORKC2) & is.na(EDCAT7_TC1) ~ NA,
+                              .default = NA))
+
+df <- df %>%
+  mutate(group_04 = case_when(AGEG10LFS == 1 & EDWORK == 2 & EDCAT7 < 3 ~ 1,
+                              LEAVER1624 == 0 & EDWORK == 2 & EDCAT7 < 3 ~ 1,
+                              AGEG10LFS != 1 & EDWORK != 2 ~ 0,
+                              LEAVER1624 != 0 & EDWORK != 2 ~ 0,
+                              is.na(EDWORK) & is.na(EDCAT7) ~ NA,
+                              .default = NA))
+
+
+group_04_population <- df2 %>%
+  group_by(group_04) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2022)
+
+group_04_population1 <- df %>%
+  group_by(group_04) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2012)
+
+group_04_pop <- bind_rows(group_04_population, group_04_population1)
+
+group_04_pop <- group_04_pop %>%
+  mutate(label = case_when(group_04 == 1 ~ "Azubi.",
+                           group_04 == 0 ~ "Nicht Azubi",
+                           .default = "Other"))
+
+rm(group_04_population, group_04_population1)
+
+group_04_pop <- group_04_pop %>%
+  select(label, year, weighted_count, percent) %>%
+  mutate(percent = round(percent, 1),
+         weighted_count = round(weighted_count, 0))
+
+
+kable(group_04_pop, caption = "Table 3. Bevölkerungsstatistik Auszubildene, 16 bis 65, Deutschland",
+      col.names = c("Gruppe", "Jahr", "Einwohnerzahl", "Prozent"))
+
+```
+
+### Table 4. Bevölkerungsstatistik Azubis, gering Lit.
+
+```{r g04gering}
+
+df2 <- df2 %>%
+  mutate(group_04_lit = case_when(skill_reading_cat5 < 3 & group_04 == 1 ~ 4,
+                              skill_reading_cat5 > 2 & group_04 == 1 ~ 3,
+                              skill_reading_cat5 < 3 & group_04 == 0 ~ 2,
+                              skill_reading_cat5 > 2 & group_04 == 0 ~ 1,
+                              .default = NA))
+
+df <- df %>%
+  mutate(group_04_lit = case_when(skill_reading_cat5 < 3 & group_04 == 1 ~ 4,
+                              skill_reading_cat5 > 2 & group_04 == 1 ~ 3,
+                              skill_reading_cat5 < 3 & group_04 == 0 ~ 2,
+                              skill_reading_cat5 > 2 & group_04 == 0 ~ 1,
+                              .default = NA))
+
+
+group_04_lit <- df2 %>%
+  group_by(group_04_lit) %>%
+  subset(!is.na(group_04_lit)) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2022)
+
+group_04_lit1 <- df %>%
+  group_by(group_04_lit) %>%
+  subset(!is.na(group_04_lit)) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2012)
+
+group_04_popl <- bind_rows(group_04_lit, group_04_lit1)
+
+group_04_popl <- group_04_popl %>%
+  mutate(label = case_when(group_04_lit == 4 ~ "Azubi., gering Lit.",
+                           group_04_lit == 3 ~ "Azubi., nicht gering Lit.",
+                           group_04_lit == 2 ~ "Nicht Azubi., gering Lit.",
+                           group_04_lit == 1 ~ "Nicht Azubi., nicht gering Lit.",
+                           .default = "Other"))
+
+rm(group_04_lit, group_04_lit1)
+
+group_04_popl <- group_04_popl %>%
+  select(label, year, weighted_count, percent) %>%
+  mutate(percent = round(percent, 1),
+         weighted_count = round(weighted_count, 0))
+
+
+kable(group_04_popl, caption = "Table 4. Bevölkerungsstatistik, 16 bis 65, Deutschland<br> <small> Auszubildene, gering Literalität", col.names = c("Gruppe", "Jahr", "Einwohnerzahl", "Prozent"))
+
+```
+
+
+
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Zuwanderungsgeschichte ohne (anerkannten) Schulabschluss
+
+**GB-Angebote vernetzen, individuelle Kompetenzen stärken (GrubiKomNRW)**
+
+Herten: Junge Erwachsene mit Zuwanderungsgeschichte ohne (anerkannten) Schualabschluss
+
+Oberhausen: Erwerbslose Menschen, insb. Frauen, mit Zuwanderungsgeschichte, ohne (anerkannten) Schulabschluss/  Berufsabschluss 
+
+
+### Table 5. Zugewanderte ohne Schulabschluss
+
+```{r g06}
+
+df2 <- df2 %>%
+  mutate(group_06 = case_when(FORBORN == 1 & EDCAT7_TC1 == 1 ~ 1,
+                              FORBORN == 1 & is.na(EDCAT7_TC1) ~ 1,
+                              .default = 0))
+
+df <- df %>%
+  mutate(group_06 = case_when(FORBORN == 1 & EDCAT7 == 1 ~ 1,
+                              FORBORN == 1 & is.na(EDCAT7) ~ 1,
+                              .default = 0))
+  
+group_06 <- df2 %>%
+  group_by(group_06) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2022)
+
+group_061 <- df %>%
+  group_by(group_06) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2012)
+
+group_06pop <- bind_rows(group_06, group_061)
+
+group_06pop <- group_06pop %>%
+  mutate(label = case_when(group_06 == 1 ~ "Zugewand. ohne Schulabschluss",
+                           group_06 == 0 ~ "Den Rest",
+                           .default = "Den Rest"))
+
+rm(group_06, group_061)
+
+group_06pop <- group_06pop %>%
+  select(label, year, weighted_count, percent) %>%
+  mutate(percent = round(percent, 1),
+         weighted_count = round(weighted_count, 0))
+
+
+kable(group_06pop, caption = "Table 5. Bevölkerungsstatistik, 16 bis 65, Deutschland<br> <small> Zuwanderer ohne Schulabschluss", 
+      col.names = c("Gruppe", "Jahr", "Einwohnerzahl", "Prozent"))
+
+```
+
+### Table 6. Zugewanderte ohne Schulabschluss nach Geschlecht 
+
+```{r g06t6}
+
+df2 <- df2 %>%
+  mutate(group_06_g = case_when(group_06 == 1 & A2_N02 == 1 ~ 4,
+                              group_06 == 1 & A2_N02 == 2 ~ 3,
+                              group_06 == 0 & A2_N02 == 1 ~ 2,
+                              group_06 == 0 & A2_N02 == 2 ~ 1,
+                              .default = NA))
+
+df <- df %>%
+  mutate(group_06_g = case_when(group_06 == 1 & GENDER_R == 1 ~ 4,
+                              group_06 == 1 & GENDER_R == 2 ~ 3,
+                              group_06 == 0 & GENDER_R == 1 ~ 2,
+                              group_06 == 0 & GENDER_R == 2 ~ 1,
+                              .default = NA))
+  
+group_06_g <- df2 %>%
+  group_by(group_06_g) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2022)
+
+group_061_g <- df %>%
+  group_by(group_06_g) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2012)
+
+group_06popg <- bind_rows(group_06_g, group_061_g)
+
+group_06popg <- group_06popg %>%
+  mutate(label = case_when(group_06_g == 4 ~ "Zugewand. ohne Schulabschluss / Männer",
+                           group_06_g == 3 ~ "Zugewand. ohne Schulabschluss / Frauen",
+                           group_06_g == 2 ~ "Den Rest / Männer",
+                           group_06_g == 1 ~ "Den Rest / Frauen",
+                           .default = NA))
+
+rm(group_06_g, group_061_g)
+
+group_06popg <- group_06popg %>%
+  select(label, year, weighted_count, percent) %>%
+  mutate(percent = round(percent, 1),
+         weighted_count = round(weighted_count, 0))
+
+
+kable(group_06popg, caption = "Table 6. Bevölkerungsstatistik, 16 bis 65, Deutschland<br> <small> Zuwanderer ohne Schulabschluss nach Geschlecht", 
+      col.names = c("Gruppe", "Jahr", "Einwohnerzahl", "Prozent"))
+
+```
+
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## gering literalisierte, insbes. Frauen, Mütter
+
+**Infrastruktur für Grundbildung (InfraGruTrier)**
+
+### Table 7. Bew.statistik Frauen, Mütter, Mig.hintergrund
+
+```{r g07}
+
+df2 <- df2 %>%
+  mutate(group_07 = case_when(J2_Q03a == 1 & A2_N02 == 2 & FORBORN == 0 ~ 4,
+                              J2_Q03a == 2 & A2_N02 == 2 & FORBORN == 0 ~ 3,
+                              J2_Q03a == 1 & A2_N02 == 2 & FORBORN == 1 ~ 2,
+                              J2_Q03a == 2 & A2_N02 == 2 & FORBORN == 1 ~ 1,
+                              .default = 0))
+
+df <- df %>%
+  mutate(group_07 = case_when(J_Q03a == 1 & GENDER_R == 2 & FORBORN == 0 ~ 4,
+                              J_Q03a == 2 & GENDER_R == 2 & FORBORN == 0 ~ 3,
+                              J_Q03a == 1 & GENDER_R == 2 & FORBORN == 1 ~ 2,
+                              J_Q03a == 2 & GENDER_R == 2 & FORBORN == 1 ~ 1,
+                              .default = 0))
+  
+group_07 <- df2 %>%
+  subset(group_07!=0) %>%
+  group_by(group_07) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2022)
+
+group_071 <- df %>%
+  subset(group_07!=0) %>%
+  group_by(group_07) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE)) %>%
+  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
+  ungroup() %>%
+  mutate(year = 2012)
+
+group_07pop <- bind_rows(group_07, group_071)
+
+group_07pop <- group_07pop %>%
+  mutate(label = case_when(group_07 == 4 ~ "Deutsch geb. mit Kinder",
+                           group_07 == 3 ~ "Deutsch geb. ohne Kinder",
+                           group_07 == 2 ~ "Ausland geb. mit Kinder",
+                           group_07 == 1 ~ "Ausland geb. ohne Kinder",
+                           .default = NA))
+
+rm(group_07, group_071)
+
+group_07pop <- group_07pop %>%
+  select(label, year, weighted_count, percent) %>%
+  mutate(percent = round(percent, 1),
+         weighted_count = round(weighted_count, 0))
+
+
+kable(group_07pop, caption = "Table 7. Bevölkerungsstatistik, 16 bis 65, Frauen<br> <small> nach Mütterschaft und Einwanderung", 
+      col.names = c("Gruppe", "Jahr", "Einwohnerzahl", "Prozent"))
+
+```
+
+
+### Figure 3. Frauen, Kinder, Einwanderung und Kompetenzen
+
+```{r g07fig}
+
+g07cat5_2012 <- df %>%
+  subset(!is.na(group_07) & !is.na(literacy_level)) %>%
+  group_by(group_07, literacy_level) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE), .groups = "drop") %>%
+  group_by(group_07) %>%
+  mutate(percent = weighted_count / sum(weighted_count) * 100,
+         literacy_level = factor(literacy_level,
+                                     levels = c(0, 1, 2, 3, 4), 
+                                     labels = c("Unter 1", "Niveau 1", "Niveau 2", "Niveau 3", "Niveau 4/5")),
+         year = 2012)
+
+g07cat5_2022 <- df2 %>%
+  subset(!is.na(group_07) & !is.na(literacy_level)) %>%
+  group_by(group_07, literacy_level) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE), .groups = "drop") %>%
+  group_by(group_07) %>%
+  mutate(percent = weighted_count / sum(weighted_count) * 100,
+         literacy_level = factor(literacy_level,
+                                     levels = c(0, 1, 2, 3, 4), 
+                                     labels = c("Unter 1", "Niveau 1", "Niveau 2", "Niveau 3", "Niveau 4/5")),
+         year = 2022)
+
+## Population
+
+g07cat5 <- rbind(g07cat5_2022, g07cat5_2012)
+
+
+g07cat5 %>%
+  subset(year == 2022 & group_07 != 0) %>%
+ggplot(aes(x = literacy_level, y = percent, color = factor(group_07), group = factor(group_07))) +
+  geom_point(size = 3) +                
+  geom_line() +      
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  
+  scale_color_manual(values = c(colors4[1], colors4[3], colors4[2], colors4[4]), 
+                     labels = c("Ausland geb. ohne Kinder", "Ausland geb. mit Kinder", "Deutschl. geb. ohne Kinder", "Deutschl. geb. mit Kinder")) +
+  labs(x = "Lesekompetenz", 
+       y = "Prozent von die Gruppe", 
+       color = "Gruppe",
+       title = "Lesekompetenz Frauen, nach Mutterschaft und Einwanderung") +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2))
+
+
+
+```
+```{r g07figen}
+
+agg_png(here("Results", "Fig3.png"), res = 144, width = 1000, height = 700)
+
+g07cat5_2012 <- df %>%
+  subset(!is.na(group_07) & !is.na(literacy_level)) %>%
+  group_by(group_07, literacy_level) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE), .groups = "drop") %>%
+  group_by(group_07) %>%
+  mutate(percent = weighted_count / sum(weighted_count) * 100,
+         literacy_level = factor(literacy_level,
+                                     levels = c(0, 1, 2, 3, 4), 
+                                     labels = c("Below 1", "Level 1", "Level 2", "Level 3", "Level 4/5")),
+         year = 2012)
+
+g07cat5_2022 <- df2 %>%
+  subset(!is.na(group_07) & !is.na(literacy_level)) %>%
+  group_by(group_07, literacy_level) %>%
+  summarise(weighted_count = sum(SPFWT0, na.rm = TRUE), .groups = "drop") %>%
+  group_by(group_07) %>%
+  mutate(percent = weighted_count / sum(weighted_count) * 100,
+         literacy_level = factor(literacy_level,
+                                     levels = c(0, 1, 2, 3, 4), 
+                                     labels = c("Below 1", "Level 1", "Level 2", "Level 3", "Level 4/5")),
+         year = 2022)
+
+## Population
+
+g07cat5 <- rbind(g07cat5_2022, g07cat5_2012)
+
+
+g07cat5 %>%
+  subset(year == 2022 & group_07 != 0) %>%
+ggplot(aes(x = literacy_level, y = percent, color = factor(group_07), group = factor(group_07))) +
+  geom_point(size = 3) +                
+  geom_line() +      
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  
+  scale_color_manual(values = c(colors4[1], colors4[3], colors4[2], colors4[4]), 
+                     labels = c("Migrant no children", "Migrant with children", "Native-born no children", "Native-born with children")) +
+  labs(x = " \nPIAAC Literacy", 
+       y = "Percent of the Group", 
+       color = "Groups",
+       title = "Women's Literacy by Motherhood and Immigration") +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2))
+
+dev.off()
+
+include_graphics(here("Results", "Fig3.png"))
+
+```
+
+### Figure 4. Frauen, Mutterschaft, Lesekompetenz Veränderungen im Laufe der Zeit
+
+
+```{r fig4}
+
+agg_png(here("Results", "Fig4en.png"), res = 144, width = 800, height = 500)
+
+g07cat5 %>%
+  subset(group_07 == 2) %>%
+ggplot(aes(x = literacy_level, y = percent, color = factor(year), group = factor(year))) +
+  geom_point(size = 3) +                
+  geom_line() +      
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  
+  scale_color_manual(values = c(colors4[1], colors4[3]),
+                     labels = c("Cycle 1. 2012", "Cycle 2. 2022")) +
+  annotate("text", x = c(1,1), y = c(5,27), color = c(colors4[1], colors4[3]), label = c("Cy1. 2012", "Cy2. 2022")) +  
+  labs(x = " \nPIAAC Literacy", 
+       y = "Percent of the Group", 
+       color = NULL,
+       title = "Immigrant Mother Literacy Skills\nacross PIAAC Cycles") +
+  theme_classic() +
+  theme(legend.position = "none") +
+  guides(color = guide_legend(nrow = 2))
+
+dev.off()
+
+#include_graphics(here("Results", "Fig4en.png"))
+
+
+```
+
+```{r fig4de}
+
+g07cat5 %>%
+  subset(group_07 == 2) %>%
+ggplot(aes(x = literacy_level, y = percent, color = factor(year), group = factor(year))) +
+  geom_point(size = 3) +                
+  geom_line() +      
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  
+  scale_color_manual(values = c(colors4[1], colors4[3]),
+                     labels = c("Cycle 1. 2012", "Cycle 2. 2022")) +
+  annotate("text", x = c(1,1), y = c(5,27), color = c(colors4[1], colors4[3]), label = c("Zy1. 2012", "Zy2. 2022")) +  
+  labs(x = " \nPIAAC Lesekompetenz", 
+       y = "Prozent der Gruppe", 
+       color = NULL,
+       title = "Zugewander Mutter Literalität\nUnterschied zwischen PIAAC-Zyklen") +
+  theme_classic() +
+  theme(legend.position = "none") +
+  guides(color = guide_legend(nrow = 2))
+
+```
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Gering lit. Zugewanderte ohne Berufsabschluss; Teilnehmende von Integrationskursen
+
+**Grundbildungsteilzeit – Pfade in gute Arbeit (GBTZ)**
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Nicht formal Qualifizierte mit GB-Bedarf 
+
+**GB-Pfad zur berufl. (Teil-) Qualifizierung Arbeitsloser & Beschäftigter (AoG-plus-TQ)**
+
+
+
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Erwerbslose Erw. mit Migrationshintergrund
+
+und junge Erwachsene am Übergang in die Arbeitswelt (o. Schul- /Berufsabs.)
+
+** Mind the GAP –  
+
+GB-Pfade anschlussfähig und passgenau gestalten**
+__________________________________________________________________________________________________
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## Information
+
+### Zitationen
+
+```{r refs}
+
+packages %>%
+  map(citation) %>%
+  print(style = "text")
+
+```
+
+### Colophon
+
+```{r colophon}
+
+sessionInfo()
+
+```
