@@ -48,7 +48,7 @@ pacman::p_load(packages, character.only = T)
 ```{r }
 
 
-df <- read_rds(here("Data", "df.RDS"))
+#df <- read_rds(here("Data", "df.RDS"))
 df2 <- read_rds(here("Data", "df2.RDS"))
 
 # basic or lower literacy
@@ -56,8 +56,8 @@ df2 <- read_rds(here("Data", "df2.RDS"))
 df2 <- df2 %>%
   mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0))
 
-df <- df %>%
-  mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0))
+#df <- df %>%
+#  mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0))
 
 ```
 
