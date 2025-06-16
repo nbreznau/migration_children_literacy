@@ -749,7 +749,9 @@ ame_df <- ame_df %>%
 
 ```
 
-##### Plot
+##### Fig 1 orig CIs
+
+Original CIs
 
 ```{r}
 
@@ -777,6 +779,82 @@ ggplot(ame_df, aes(x = type, y = AME, fill = type)) +
 dev.off()
 
 include_graphics(here("Results", "Fig1.png"))
+
+
+```
+
+##### Adjust CIs
+
+The confidence intervals here refer to the entire sample across 26 countries. To make them more realistic to a treatment in one country, we adjust them down to a sample of 5,700 which is the average sample size per country.
+
+```{r}
+
+# Function to adjust CI to a new sample size (e.g., average country = 5700)
+adjust_ci <- function(ttest_obj, new_n = 5700) {
+  mean_diff <- ttest_obj$estimate[1] - ttest_obj$estimate[2]
+  pooled_sd <- sqrt(((ttest_obj$parameter + 1) * ttest_obj$stderr^2))  # back-calculate SD
+  se_new <- pooled_sd / sqrt(new_n)
+  ci_margin <- qt(0.975, df = new_n - 1) * se_new
+  lower <- mean_diff - ci_margin
+  upper <- mean_diff + ci_margin
+  return(c(lower, upper))
+}
+
+# Apply adjusted CI to each t-test result
+ci1 <- adjust_ci(ttest1)
+ci2 <- adjust_ci(ttest2)
+ci3 <- adjust_ci(ttest3)
+ci4 <- adjust_ci(ttest4)
+ci5 <- adjust_ci(ttest5)
+ci6 <- adjust_ci(ttest6)
+
+# Construct new dataframe for plotting with updated CIs
+ame_df2 <- data.frame(
+  type = c(
+    "1. Foreign-born mother\nnon-native speaker",
+    "2. Foreign-born no children\nnon-native speaker",
+    "3. Foreign-born mother\nnative speaker",
+    "4. Foreign-born no children\nnative speaker",
+    "5. Native-born mother\nnative speaker",
+    "6. Native-born no children\nnative speaker"
+  ),
+  AME = c(-AME1, -AME2, -AME3, -AME4, -AME5, -AME6),  # note the negative flip as before
+  lower = c(ci1[2], ci2[2], ci3[2], ci4[2], ci5[2], ci6[2]),  # upper bound becomes more negative
+  upper = c(ci1[1], ci2[1], ci3[1], ci4[1], ci5[1], ci6[1])   # lower bound becomes more negative
+)
+
+
+```
+
+##### Fig 1 new CIs
+
+
+```{r}
+
+agg_png(here("Results", "Fig1new.png"), res = 144, height = 600, width = 750)
+
+ggplot(ame_df2, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) +
+  labs(
+    title = NULL,
+    x = NULL,
+    y = "Average Marginal Effect\nof Participation in ALE",
+    fill = "Type"
+  ) +
+  coord_flip() +  
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y = element_text(hjust = 1, size = 8),
+    axis.text.x = element_text(size = 8),
+    axis.title.x = element_text(size = 8),
+    legend.position = "none"
+  )
+
+dev.off()
+
+include_graphics(here("Results", "Fig1new.png"))
 
 
 ```
