@@ -534,7 +534,7 @@ ggplot(ame_df, aes(x = type, y = AME, fill = type)) +
   labs(
     title = NULL,
     x = NULL,
-    y = "Average Marginal Effect per Course\nof Participation in ALE",
+    y = "Average Treatment Effect per Course\nof Participation in ALE",
     fill = "Type"
   ) +
   coord_flip() +  
@@ -881,7 +881,7 @@ ggplot(ame_df_eur, aes(x = type, y = AME, fill = type)) +
   labs(
     title = NULL,
     x = NULL,
-    y = "Average Marginal Effect in Europe\nof Participation in ALE",
+    y = "Average Treatment Effect, Europe Only\nof Participation in ALE",
     fill = "Type"
   ) +
   coord_flip() +  
@@ -899,4 +899,24 @@ include_graphics(here("Results", "Fig1_sens_eur.png"))
 
 
 ```
+
+## Citations
+
+```{r}
+
+packages %>%
+  map(citation) %>%
+  print(style = "text")
+
+```
+
+
+## Colophon
+
+```{r}
+
+sessionInfo()
+
+```
+
 

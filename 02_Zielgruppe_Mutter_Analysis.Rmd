@@ -175,7 +175,7 @@ cor_pval2 <- round(cor_test2$p.value, 3)
 ```
 
 
-### Figure 1. FET and Skills
+### Figure X. FET and Skills
 
 Here we see a strong association of participation in further education courses in the last 12 months (x-axis) and the reading skill level for immigrant mothers (y-axis) at the country-level (r = `r cor_coef`, p = `r cor_pval`). It also appears that in countries with a higher percentage of immigrant mothers (darker blue point), the overall average reading skills are lower. There is little or no association between the reading skill gap between natives and immigrants (size of the point) and the x- or y-axis.
 
@@ -207,7 +207,7 @@ ggplot(plot_data, aes(x = immigrant_mothers_fet, y = reading_immigrant)) +
 
 ```
 
-### Figure 2. FET and Skills Gap
+### Figure X. FET and Skills Gap
 
 
 There is a strong association of having a larger gap in further education participation between natives and immigrant mothers (x-axis) and the readings skills gap between natives and immigrant mothers (y-axis) (r = `r cor_coef2`, p = `r cor_pval2`).
@@ -764,7 +764,7 @@ ggplot(ame_df, aes(x = type, y = AME, fill = type)) +
   labs(
     title = NULL,
     x = NULL,
-    y = "Average Marginal Effect\nof Participation in ALE",
+    y = "Average Treatment Effect\nof Participation in ALE",
     fill = "Type"
   ) +
   coord_flip() +  
@@ -840,7 +840,7 @@ ggplot(ame_df2, aes(x = type, y = AME, fill = type)) +
   labs(
     title = NULL,
     x = NULL,
-    y = "Average Marginal Effect\nof Participation in ALE",
+    y = "Average Treatment Effect\nof Participation in ALE",
     fill = "Type"
   ) +
   coord_flip() +  
@@ -967,4 +967,24 @@ include_graphics(here("Results", "Fig2.png"))
 
 
 ```
+## Citations
+
+```{r}
+
+packages %>%
+  map(citation) %>%
+  print(style = "text")
+
+```
+
+
+## Colophon
+
+```{r}
+
+sessionInfo()
+
+```
+
+
 

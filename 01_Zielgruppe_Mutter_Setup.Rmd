@@ -276,6 +276,23 @@ df2 <- df2 %>%
 write_rds(df2, here("Data", "df2.RDS"))
 ```
 
+## Citations
 
+```{r}
+
+packages %>%
+  map(citation) %>%
+  print(style = "text")
+
+```
+
+
+## Colophon
+
+```{r}
+
+sessionInfo()
+
+```
 
 
