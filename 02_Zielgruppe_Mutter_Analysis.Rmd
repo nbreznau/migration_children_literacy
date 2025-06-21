@@ -869,14 +869,14 @@ Here we calculate how much skills would improve if every non-participant in ALE 
 
 
 
-# Set your AMEs
+# Set AMEs
 AME1 <- -mean(pred10 - pred11)  # gain from ALE for Type 1
 AME6 <- -mean(pred60 - pred61)  # gain from ALE for Type 6
 
 # Subset to female respondents
 df_female <- df2 %>% filter(female == 1)
 
-# STEP 1: boost literacy for Type 1 non-participants
+# Boost literacy for Type 1 non-participants
 df_female <- df_female %>%
   mutate(
     boost_type1 = ifelse(
@@ -891,7 +891,7 @@ df_female <- df_female %>%
     )
   )
 
-# STEP 2: weighted mean literacy per country
+# Weighted mean literacy per country
 summary_by_country <- subset(df_female, !is.na(children) & !is.na(FORBORN) & !is.na(FORLANG)) %>%
   group_by(iso3c) %>%
   summarise(
@@ -900,23 +900,33 @@ summary_by_country <- subset(df_female, !is.na(children) & !is.na(FORBORN) & !is
     skill_type6boost = weighted.mean(boost_type6, aweight, na.rm = TRUE) - skill_base
   )
 
-# STEP 3: calculate percent of total population who are Type 1
+# Total of national pop that are Type 1
 type1_shares <- df2 %>%
   mutate(type1 = ifelse(
     female == 1 & FORBORN == 1 & children == 1 & FORLANG == 1,
     1, 0),
+    type1_noale = ifelse(
+      female == 1 & FORBORN == 1 & children == 1 & FORLANG == 1 & NFE12 == 0,
+    1, 0),
+    type6 = ifelse(FORBORN == 0 & children == 0 & FORLANG == 0, 1, 0 ),
     type6_noALE = ifelse(FORBORN == 0 & NFE12 == 0 & children == 0 & FORLANG == 0, 1, 0 )) %>%
   group_by(iso3c) %>%
   summarise(
     pct_type1_totalpop = weighted.mean(type1, aweight, na.rm = TRUE),
+    pct_type1noale_totalpop = weighted.mean(type1_noale, aweight, na.rm = TRUE),
+    pct_type6_totalpop = weighted.mean(type6, aweight, na.rm = TRUE),
     pct_type6_noALE_totalpop = weighted.mean(type6_noALE, aweight, na.rm = TRUE),
   )
 
-# STEP 4: merge results
-final_df <- left_join(summary_by_country, type1_shares, by = "iso3c")
+df_pop <- select(df2, iso3c, pop) %>%
+  group_by(iso3c) %>%
+  summarise_all(mean, na.rm = T)
 
-# Optional: print or inspect
-print(final_df)
+# Merge
+final_df <- summary_by_country %>% 
+  left_join(type1_shares, by = "iso3c") %>%
+  left_join(df_pop)
+  
 
 ```
 
@@ -967,6 +977,24 @@ include_graphics(here("Results", "Fig2.png"))
 
 
 ```
+
+## Table of Group 6 and 1
+
+```{r}
+
+table_s3 <- final_df %>%
+  mutate(oftype1_pctwithout = pct_type1noale_totalpop/pct_type1_totalpop,
+         oftype6_pctwithout = pct_type6_noALE_totalpop/pct_type6_totalpop) %>%
+  select(iso3c, pop, pct_type1_totalpop, pct_type1noale_totalpop, oftype1_pctwithout, pct_type6_totalpop, pct_type6_noALE_totalpop, oftype6_pctwithout)
+  
+
+kable(table_s3, format = "html", digits = 3, caption = "Table S3: Population Percentages and ALE Participation") %>%
+  save_kable(here("Results", "table_s3.html"))
+
+
+```
+
+
 ## Citations
 
 ```{r}
