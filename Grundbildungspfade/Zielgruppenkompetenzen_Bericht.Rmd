@@ -11,10 +11,33 @@ output:
     toc_depth: 1
 ---
 
+## Zielgruppen
+
+**Zielgruppenprofile** 
+*26 von den Projekten entwickelte Profile im Rahmen einer Forms-Abfrage zur Vorbereitung des Werkstattgesprächs am 26.02.2025*
+
+| Projekt und Profilgeber*in | Profil | Identifizierbar |
+|-----------------------------|--------|-----------------|
+| **GrundbildungsBrücken Hamburg (Kohlmüller)** | Junger zugewanderter Mann (20 J.), Schulbesuch im Herkunftsland bis zur 9. Klasse, arbeitet als Helfer im Logistik-Bereich, Perspektive: Weiterqualifizierung zur Fachkraft (TQ). | NA |
+| **GrundbildungsBrücken Hamburg (Lück)** | Mann (34 J.) aus Syrien zugewandert, keinen anerkannten Abschluss, Berufserfahrung, Integrationskurs mit A2 abgeschlossen, keinen Anspruch auf BAMF-Förderung, arbeitslos. | NA |
+| **NetzWege (Akdeniz)** | Junger Erwachsener (18 J.) mit Zuwanderungsgeschichte (seit 7 Jahren in Deutschland), bisher ohne Schulabschluss. | NA |
+| **NetzWege (Brauneck, Arusoğlu)** | Frau mit Zuwanderungsgeschichte, die einen Integrationskurs absolviert hat und nach Anschlussperspektiven sucht. | NA |
+| **GrubiKomNRW (Kemner, Varney, Aksabun)** | Alleinerziehende Mutter (34 J.) mit noch nicht anerkannter Berufsqualifikation, jobbt als Hilfskraft in der KiTa und stockt ihr Einkommen auf (Bürgergeld), möchte als Erzieherin in Deutschland arbeiten. | NA |
+| **AoG-plus-TQ (Dauser)** | **Profil 1 – Lager (Leitlinie höher):** Jonas (27 J.), Hauptschulabschluss, abgebrochene Ausbildung, arbeitet seit 5 Jahren als Hilfskraft in einem Logistikzentrum, träumt davon Lagerleiter zu werden.<br>**Profil 2 – Transport (Leitlinie integrativer):** Amin (41 J.), vor 5 Jahren zugewandert, jobbt als Fahrer in einem Transportunternehmen, benötigt für eine berufliche Qualifizierung (Erwerb des LKW-Führerscheins) Sprachkompetenzen.<br>**Profil 3 – Produktion (Leitlinie breiter):** Anna (36 J.), arbeitet seit 15 Jahren als ungelernte Produktionshelferin in einem Metallbetrieb, negative Schulerfahrungen, fühlt sich im Hinblick auf berufliche Weiterbildung und allgemein das „Lernen“ unsicher. | NA |
+| **GriPs (Cavallini, Ryssel)** | **Profil 1:** Frau mit Migrationshintergrund (45 J.), 15 Jahre in der Pflegebranche gearbeitet ohne formale Qualifizierung, vom Arbeitgeber gebeten eine Qualifizierung zur Pflegefachassistentin zu machen.<br>**Profil 2:** Mann (35 J.), betriebsbedingte Kündigung als Mitarbeiter der Werft KG, zeigt Interesse an der Pflegebranche, hat keinen Schulabschluss, im Beratungskontakt mit dem Jobcenter.<br>**Profil 3:** Mann (23 J.) aus Vietnam, Integrationskurs absolviert, zeigt Interesse an der Pflegebranche, Empfehlung: Teilnahme Vorkurs Pflegehilfe des GriPs-Bildungspfades. | NA |
+| **Zukunftswege (Butkewitz, Tetzel)** | **Profil 1:** Mann (48 J.), arbeitet seit 10 Jahren im Helferbereich in einem Logistikunternehmen, möchte sich weiterqualifizieren, Testung der BA hat ergeben, dass seine Kenntnisse in Mathe und Deutsch nicht für die Anforderungen einer TQ ausreichen.<br>**Profil 2:** Alleinerziehende Frau (41 J.), Schulabschluss in Bulgarien, Berufserfahrung in Deutschland (Helferbereich Lager), B2-Sprachniveau, möchte im Büro arbeiten, aktuell arbeitslos.<br>**Profil 3:** Mann (26 J.), keine Berufsausbildung, zwei abgebrochene Ausbildungen, ALG 1 + Bürgergeld, jobbt ehrenamtlich bei der Tafel, Dyskalkulie, schlechte Schulerfahrungen. | NA |
+| **Zukunftswege (Walpuski)** | 16-jähriger junger Mann, noch ohne Schulabschluss, Frustration gegenüber dem normalen Schulsystem, große Wissenslücken und wenig Selbstvertrauen. | NA |
+| **InfraGru Trier (Cremer-Freis)** | **Profil 1:** Junger Mann, Azubi in der Baubranche mit Unterstützungsbedarf.<br>**Profil 2:** 32-jährige Mutter von 4 Kindern, seit 6 Jahren in Deutschland, keine Berufserfahrung, keine formalen Qualifikationen, lebt im sozialen Brennpunkt, Anbindung über die Kinder an die KiTa. | NA |
+| **Mind the GAP (Lerchenberger, Gramenz)** | **Profil 1:** Junger Mann (19 J.) aus einer Sinti-Familie mit fünf Geschwistern, keinen Schulabschluss, viele Gelegenheitsarbeiten.<br>**Profil 2:** Junger Mann (17 J.) mit schlechtem Mittelschulabschluss und bisher erfolgsloser Bewerbung um einen Ausbildungsplatz.<br>**Profil 3:** Junge Frau (20 J.) aus bildungsnaher Familie, Ausbildungsabbruch wegen psychischer Belastung, nimmt therapeutische und sozialarbeiterische Beratung in Anspruch. | NA |
+| **Mind the GAP (Maresch-Kern)** | **Profil 1:** Alleinerziehende Mutter (30 J.), arbeitslos, mit Deutschkenntnissen, kaum in der Schule gewesen.<br>**Profil 2:** 40-jähriger aus der EU zuwanderter Mann, Gelegenheitsarbeiten, geringe Deutschkenntnisse, fehlendes Systemwissen.<br>**Profil 3:** 30-jähriger aus Afghanistan zuwanderter Mann, unsicherer Aufenthaltsstatus, Übergangswohnheim, Alpha-Integrationskurse durchlaufen. | NA |
+| **BerKo (Kohlhofer)** | Alleinerziehende Frau (35 J.), in Deutschland aufgewachsen, keinen Schulabschluss, negative Schulerfahrungen, viele Jobs über Zeitarbeit, Langzeitarbeitslos. | NA |
+| **BerKo (Eimann)** | Junger Mann, Azubi im Handwerk mit Unterstützungsbedarf, Leistungsfatalismus, träumt von luxuriösem Leben, des Öfteren schon Ärger mit Behörden gehabt. | NA |
+| **GrubiTZ (Schmid, Dzillak)** | Menschen mit Zuwanderungsgeschichte, die aktuell an Integrationskursen teilnehmen und eine baldige Arbeitsaufnahme anstreben. | NA |
+
 
    
 
-```{r setup, echo = F, warning = F, message = F}
+```{r setup, echo = F, warning = F, message = F, include = F}
 
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
@@ -22,7 +45,8 @@ packages <- c('tidyverse',
               'readr',
               'here',
               'ggplot2',
-              'kableExtra')
+              'kableExtra',
+              'EdSurvey')
 
 pacman::p_load(packages, character.only = T)
 
@@ -45,7 +69,7 @@ Diese Studie war untestutzt von mein [PIAAC Variable Finder](https://nate-brezna
 Hinweiss: A2_Q04aDEX "Und wie ist es mit der deutschen Sprache: 
 Responses:  01: Wie gut sprechen Sie Deutsch? | 02: Wie gut schreiben Sie auf Deutsch? | 03: Wie gut lesen Sie auf Deutsch?" ist nicht im PUF (Public Use File)
 
-```{r data}
+```{r data, include = F}
 #df <- read_csv(here::here("Data", "piaac_combined.csv"), show_col_types = F) %>%
 #  subset(CNTRYID == 276)
 
