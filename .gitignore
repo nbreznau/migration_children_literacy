@@ -2,5 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
-/data/piaac_combined_2.csv
-/data/piaac_combined.csv
+/Data/piaac_combined_2.csv
+/Data/piaac_combined.csv
+/Data/df.RDS
+/Data/df2.RDS

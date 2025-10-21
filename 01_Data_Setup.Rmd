@@ -16,7 +16,7 @@ output:
     toc_depth: '1'
 ---
 
-This code is setup up to also investigate Cycle 1, but we use only Cycle 2 here. 
+This code is setup up to investigate Cycle 1 for Fig 1, but we use only Cycle 2 here. 
 
 ## Setup   
 
@@ -44,7 +44,7 @@ https://github.com/nbreznau/ALE_degrees_institutions
 
 ```{r data}
 
-#df <- read_csv(here("Data", "piaac_combined.csv")) 
+df <- read_csv(here("Data", "piaac_combined.csv"))
 df2 <- read_csv(here("Data", "piaac_combined_2.csv"))
 ```
 
@@ -54,84 +54,86 @@ df2 <- read_csv(here("Data", "piaac_combined_2.csv"))
 
  #### Cycle 1
 
-```{r}
+```{r, warning = F}
 
-# df <- df %>%
-#   # subset(PAIDWORK12 == 1 | !C_Q07 %in% c(4, 5, 7, 8, 97) | NFE12JR == 5)  %>%
-#   mutate(female = case_when(GENDER_R == 2 ~ 1,
-#                           GENDER_R == 1 ~ 0,
-#                           TRUE ~ NA_real_),
-#          age10 = case_when(AGEG10LFS == 1 ~ 20,
-#                          AGEG10LFS == 2 ~ 30,
-#                          AGEG10LFS == 3 ~ 40,
-#                          AGEG10LFS == 4 ~ 50,
-#                          AGEG10LFS == 5 ~ 60,
-#                          TRUE ~ NA_real_
-#                          ),
-#          
-#          FORBORN = ifelse(J_Q04a == "1", 0,
-#                            ifelse(J_Q04a == "2", 1, NA)),
-#          born_in_country_mother = ifelse(J_Q06a == "1", 1,
-#                                   ifelse(J_Q06a == "2", 0, NA)), # includes guardian if not with biological parents (2nd wave does not)
-#          born_in_country_father = ifelse(J_Q07a == "1", 1,
-#                                   ifelse(J_Q07a == "2", 0, NA)),
-#          FORLANG = case_when(as.numeric(NATIVESPEAKER) == 1 ~ 0,
-#                              as.numeric(NATIVESPEAKER) == 0 ~ 1,
-#                              .default = NA_real_),
-#          BORNLANG = case_when(NATIVESPEAKER == 2 & born_in_country == 1 ~ 1,
-#                               NATIVESPEAKER == 1 & born_in_country == 1 ~ 2,
-#                               NATIVESPEAKER == 2 & born_in_country == 0 ~ 3,
-#                               NATIVESPEAKER == 1 & born_in_country == 0 ~ 4,
-#                               .default = NA_real_),
-#          # fix mising EDLEVEL3 in Austria
-#          EDCAT6 = as.numeric(EDCAT6),
-#          et = case_when(EDCAT6 == 2 | EDCAT6 == 3 ~ 2,
-#                         EDCAT6 == 4 | EDCAT6 == 5 | EDCAT6 == 6 | EDCAT6 == 7 ~ 3,
-#                         CNTRYID != 40 ~ NA,
-#                         .default = EDCAT6),
-#          ed3 = ifelse(CNTRYID == 40, et, EDLEVEL3),
-#          ed_currently = B_Q02a, 
-#          children = case_when(J_Q03a == 2 ~ 0,
-#                               J_Q03a == 1 ~ 1,
-#                               TRUE ~ 0),
-#          #building an equivalent 'num of CVET courses' measure
-#          num1 = as.numeric(B_Q12b), #open or distance education?
-#          num2 = as.numeric(B_Q12d), #on-the-job training
-#          num3 = as.numeric(B_Q12f), #seminars and workshops
-#          num4 = as.numeric(B_Q12h), #courses other not reported
-#          NFE_number = num1 + num2 + num3 + num4,
-#     skill_reading = rowMeans(select(., starts_with("PVLIT")), na.rm = TRUE),
-#     skill_numeracy = rowMeans(select(., starts_with("PVNUM")), na.rm = TRUE),
-#         group_07 = case_when(children == 1 & female == 1 & FORBORN == 0 ~ 4,
-#                          children == 0 & female == 1 & FORBORN == 0 ~ 3,
-#                          children == 1 & female == 1 & FORBORN == 1 ~ 2,
-#                          children == 0 & female == 1 & FORBORN == 1 ~ 1,
-#                          .default = NA_real_),
-#     literacy_level = case_when( # PIAAC's own 5-category system
-#       skill_reading < 176 ~ 0,
-#       skill_reading < 226 ~ 1,
-#       skill_reading < 276 ~ 2,
-#       skill_reading < 326 ~ 3,
-#       skill_reading > 325 ~ 4,
-#       TRUE ~ NA_real_
-#     ),
-#     numeracy_level = case_when(
-#       skill_numeracy < 176 ~ 0,
-#       skill_numeracy < 226 ~ 1,
-#       skill_numeracy < 276 ~ 2,
-#       skill_numeracy < 326 ~ 3,
-#       skill_numeracy > 325 ~ 4,
-#       TRUE ~ NA_real_
-#     )
-#   ) %>%
-#   select(iso3c, skill_reading, skill_numeracy, literacy_level, numeracy_level, NFE12, NFE12JR, female, children, FORLANG, FORBORN, BORNLANG, group_07, NFE_number, ed3, ed_currently, SPFWT0) 
-# 
-# df <- df %>%
-#   group_by(iso3c) %>%
-# # create a weighting variable that is accurate at the country-level, that does not compare populations across countries
-#   mutate(aweight = SPFWT0 / min(SPFWT0, na.rm = T)) %>%
-#   ungroup()
-#   
+ df <- df %>%
+   # subset(PAIDWORK12 == 1 | !C_Q07 %in% c(4, 5, 7, 8, 97) | NFE12JR == 5)  %>%
+   mutate(iso3c = countrycode(as.numeric(CNTRYID), "iso3n", "iso3c"),
+         female = case_when(GENDER_R == 2 ~ 1,
+                           GENDER_R == 1 ~ 0,
+                           TRUE ~ NA_real_),
+          age10 = case_when(AGEG10LFS == 1 ~ 20,
+                          AGEG10LFS == 2 ~ 30,
+                          AGEG10LFS == 3 ~ 40,
+                          AGEG10LFS == 4 ~ 50,
+                          AGEG10LFS == 5 ~ 60,
+                          TRUE ~ NA_real_
+                          ),
+          
+          FORBORN = ifelse(J_Q04a == "1", 0,
+                            ifelse(J_Q04a == "2", 1, NA)),
+          born_in_country_mother = ifelse(J_Q06a == "1", 1,
+                                   ifelse(J_Q06a == "2", 0, NA)), # includes guardian if not with biological parents (2nd wave does not)
+          born_in_country_father = ifelse(J_Q07a == "1", 1,
+                                   ifelse(J_Q07a == "2", 0, NA)),
+          FORLANG = case_when(as.numeric(NATIVESPEAKER) == 1 ~ 0,
+                              as.numeric(NATIVESPEAKER) == 0 ~ 1,
+                              .default = NA_real_),
+          BORNLANG = case_when(NATIVESPEAKER == 2 & FORBORN == 0 ~ 1,
+                               NATIVESPEAKER == 1 & FORBORN == 0 ~ 2,
+                               NATIVESPEAKER == 2 & FORBORN == 1 ~ 3,
+                               NATIVESPEAKER == 1 & FORBORN == 1 ~ 4,
+                               .default = NA_real_),
+         # fix mising EDLEVEL3 in Austria
+          EDCAT6 = as.numeric(EDCAT6),
+          et = case_when(EDCAT6 == 2 | EDCAT6 == 3 ~ 2,
+                         EDCAT6 == 4 | EDCAT6 == 5 | EDCAT6 == 6 | EDCAT6 == 7 ~ 3,
+                         CNTRYID != 40 ~ NA,
+                         .default = EDCAT6),
+          ed3 = ifelse(CNTRYID == 40, et, EDLEVEL3),
+          ed_currently = B_Q02a, 
+          children = case_when(J_Q03a == 2 ~ 0,
+                               J_Q03a == 1 ~ 1,
+                               TRUE ~ 0),
+          #building an equivalent 'num of CVET courses' measure
+          num1 = as.numeric(B_Q12b), #open or distance education?
+          num2 = as.numeric(B_Q12d), #on-the-job training
+          num3 = as.numeric(B_Q12f), #seminars and workshops
+          num4 = as.numeric(B_Q12h), #courses other not reported
+          NFE_number = num1 + num2 + num3 + num4,
+     skill_reading = rowMeans(select(., starts_with("PVLIT")), na.rm = TRUE),
+     skill_numeracy = rowMeans(select(., starts_with("PVNUM")), na.rm = TRUE),
+         group_07 = case_when(children == 1 & female == 1 & FORBORN == 0 ~ 4,
+                          children == 0 & female == 1 & FORBORN == 0 ~ 3,
+                          children == 1 & female == 1 & FORBORN == 1 ~ 2,
+                          children == 0 & female == 1 & FORBORN == 1 ~ 1,
+                          .default = NA_real_),
+     literacy_level = case_when( # PIAAC's own 5-category system
+       skill_reading < 176 ~ 0,
+       skill_reading < 226 ~ 1,
+       skill_reading < 276 ~ 2,
+       skill_reading < 326 ~ 3,
+       skill_reading > 325 ~ 4,
+       TRUE ~ NA_real_
+     ),
+     numeracy_level = case_when(
+       skill_numeracy < 176 ~ 0,
+       skill_numeracy < 226 ~ 1,
+       skill_numeracy < 276 ~ 2,
+       skill_numeracy < 326 ~ 3,
+       skill_numeracy > 325 ~ 4,
+       TRUE ~ NA_real_
+     )
+   ) %>%
+   select(iso3c, PVLIT1:PVLIT10, PVNUM1:PVNUM10, skill_reading, skill_numeracy, literacy_level, numeracy_level, NFE12, NFE12JR, female, children, FORLANG, FORBORN, BORNLANG, group_07, NFE_number, ed3, ed_currently, SPFWT0, SPFWT1:SPFWT80) %>%
+  subset(!is.na(iso3c))
+ 
+ df <- df %>%
+   group_by(iso3c) %>%
+ # create a weighting variable that is accurate at the country-level, that does not compare populations across countries
+   mutate(aweight = SPFWT0 / min(SPFWT0, na.rm = T)) %>%
+   ungroup()
+   
 
 ```
 
@@ -191,6 +193,10 @@ df2 <- df2 %>%
     FORBORN = case_when(BORNLANG == 1 | BORNLANG == 2 ~ 0,
                         BORNLANG == 3 | BORNLANG == 4 ~ 1,
                         .default = NA),
+    # Denmark missing values
+    FORBORN = case_when(CNTRYID == 208 & A2_Q03a == "2" ~ 1,
+                        CNTRYID == 208 & A2_Q03a == "1" ~ 0,
+                        .default = FORBORN),   
     FORLANG = case_when(BORNLANG == 1 | BORNLANG == 3 ~ 0,
                         BORNLANG == 2 | BORNLANG == 4 ~ 1,
                         .default = NA),
@@ -230,7 +236,7 @@ df2 <- df2 %>%
     NFE12 = as.numeric(NFE12),
     NFE12JRa = as.numeric(NFE12JRC2), # note that this variable is coded differently than in wave one. This wave, those who did not participate in any training are coded as missing, so that this variable is only the percentage of those who reported training that reported it was job-related. This has to be fixed to compare them
     NFE12JR = ifelse(!is.na(NFE12) & is.na(NFE12JRa), "0", as.character(NFE12JRa))) %>%
-  select(iso3c, skill_reading, skill_numeracy, literacy_level, numeracy_level,NFE12, NFE12JR, NFE_barrier, underskilled, female, children, FORLANG, FORBORN, BORNLANG, group_07, NFE_number, ed3, ed_currently, SPFWT0) 
+  select(iso3c, PVLIT1:PVLIT10, PVNUM1:PVNUM10,  skill_reading, skill_numeracy, literacy_level, numeracy_level,NFE12, NFE12JR, NFE_barrier, underskilled, female, children, FORLANG, FORBORN, BORNLANG, group_07, NFE_number, ed3, ed_currently, SPFWT0, SPFWT1:SPFWT80) 
 
 df2 <- df2 %>%
   group_by(iso3c) %>%
@@ -271,7 +277,7 @@ df_gdp <- read_excel(here("Data", "mpd2023_web.xlsx"), sheet = "Full data", col_
 df2 <- df2 %>%
   left_join(df_gdp, by = c("iso3c"))
   
-#write_rds(df, here("Data", "df.RDS"))
+write_rds(df, here("Data", "df.RDS"))
 
 write_rds(df2, here("Data", "df2.RDS"))
 ```
