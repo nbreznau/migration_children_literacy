@@ -211,190 +211,6 @@ include_graphics(here("Results", "Fig1A.png"))
 ```
 
 
-
-
-
-
-
-
-
-
-## Descriptives
-
-### Immigration, Low Literacy, Sex, Parenthood
-
-The number of immigrants with basic needs
-
-```{r}
-
-basic_needs <- df2 %>%
-  mutate(group_imm = case_when(female == 1 & FORBORN == 1 & children == 0 ~ 1,
-                               female == 1 & FORBORN == 1 & children == 1 ~ 2,
-                               female == 1 & FORBORN == 0 & children == 0 ~ 3,
-                               female == 1 & FORBORN == 0 & children == 1 ~ 4,
-                               female == 0 & FORBORN == 1 & children == 0 ~ 5,
-                               female == 0 & FORBORN == 1 & children == 1 ~ 6,
-                               female == 0 & FORBORN == 0 & children == 0 ~ 7,
-                               female == 0 & FORBORN == 0 & children == 1 ~ 8,
-                               .default = NA_real_)
-         ) %>%
-  group_by(group_imm) %>%
-  summarise(
-    weighted_low = sum(SPFWT0 * reading_low, na.rm = TRUE),
-    total_weight = sum(SPFWT0, na.rm = TRUE)
-  ) %>%
-  mutate(percent_low = 100 * weighted_low / total_weight)
-
-basic_needs <- basic_needs %>%
-  mutate(label = case_match(group_imm,
-                            1 ~ "Foreign-Born Woman, No Children",
-                            2 ~ "Foreign-Born Woman, Children",
-                            3 ~ "Native-Born Woman, No Children",
-                            4 ~ "Native-Born Woman, Children",
-                            5 ~ "Foreign-Born Man, No Children",
-                            6 ~ "Foreign-Born Man, Children",
-                            7 ~ "Native-Born Man, No Children",
-                            8 ~ "Native-Born Man, Children"))
-
-```
-
-
-## Country-Level Associations
-
-### Coding
-
-```{r g07}
-  
-group_07 <- df2 %>%
-  filter(!is.na(group_07)) %>%
-  group_by(iso3c, group_07) %>%
-  summarise(
-    weighted_count = sum(SPFWT0, na.rm = TRUE),
-    weighted_skill_reading = sum(skill_reading * SPFWT0, na.rm = TRUE) / sum(SPFWT0[!is.na(skill_reading)]),
-    weighted_skill_numeracy = sum(skill_numeracy * SPFWT0, na.rm = TRUE) / sum(SPFWT0[!is.na(skill_numeracy)]),
-    fet = sum(NFE12 * SPFWT0, na.rm = T) / sum(SPFWT0[!is.na(NFE12)])
-  ) %>%
-  group_by(iso3c) %>%
-  mutate(percent = (weighted_count / sum(weighted_count)) * 100) %>%
-  ungroup() %>%
-  mutate(year = 2022)
-
-group_07 <- group_07 %>%
-  mutate(label = case_when(group_07 == 4 ~ "Native-born, Children",
-                           group_07 == 3 ~ "Native-born, no Children",
-                           group_07 == 2 ~ "Foreign-Born, Children",
-                           group_07 == 1 ~ "Foreign-Born, no Children",
-                           .default = NA))
-
-# Filter immigrant mothers
-immigrant_mothers <- group_07 %>%
-  filter(group_07 == 2) %>%
-  select(iso3c, percent, weighted_skill_reading) %>%
-  rename(
-    percent_immigrant = percent,
-    reading_immigrant = weighted_skill_reading
-  )
-
-# Get native mothers' reading scores
-native_mothers <- group_07 %>%
-  filter(group_07 == 4) %>%
-  select(iso3c, weighted_skill_reading) %>%
-  rename(reading_native = weighted_skill_reading)
-
-immigrant_mothers_fet <- group_07 %>%
-  filter(group_07 == 2) %>%
-  select(iso3c, fet) %>%
-  rename(immigrant_mothers_fet = fet)
-
-native_mothers_fet <- group_07 %>%
-  filter(group_07 == 4) %>%
-  select(iso3c, fet) %>%
-  rename(native_mothers_fet = fet)
-
-# Join and compute skill gap
-plot_data <- immigrant_mothers %>%
-  left_join(native_mothers, by = "iso3c") %>%
-  left_join(immigrant_mothers_fet, by = "iso3c") %>%
-  left_join(native_mothers_fet, by = "iso3c") %>%
-  mutate(skill_gap = reading_native - reading_immigrant,
-         fet_gap = native_mothers_fet - immigrant_mothers_fet)
-
-# Compute Pearson's correlation and store results
-cor_test <- cor.test(plot_data$immigrant_mothers_fet, plot_data$reading_immigrant)
-cor_test2 <- cor.test(plot_data$fet_gap, plot_data$skill_gap)
-
-# Optionally round them to 3 digits in variables for later reuse
-cor_coef <- round(cor_test$estimate, 3)
-cor_pval <- round(cor_test$p.value, 3)
-cor_coef2 <- round(cor_test2$estimate, 3)
-cor_pval2 <- round(cor_test2$p.value, 3)
-
-
-```
-
-
-### Figure X. FET and Skills
-
-Here we see a strong association of participation in further education courses in the last 12 months (x-axis) and the reading skill level for immigrant mothers (y-axis) at the country-level (r = `r cor_coef`, p = `r cor_pval`). It also appears that in countries with a higher percentage of immigrant mothers (darker blue point), the overall average reading skills are lower. There is little or no association between the reading skill gap between natives and immigrants (size of the point) and the x- or y-axis.
-
-
-```{r}
-
-
-ggplot(plot_data, aes(x = immigrant_mothers_fet, y = reading_immigrant)) +
-  geom_point(aes(size = abs(skill_gap), color = percent_immigrant), alpha = 0.8) +
-  geom_text_repel(aes(label = iso3c), size = 3, max.overlaps = Inf) +
-  guides(
-    size = guide_legend(title = "Skill gap\nto native\nmothers"),
-    color = guide_colorbar(title = "Immigrant\nmothers\n% of pop."),
-  ) +
-  scale_color_gradient(
-    name = "Percent immigrant mothers",
-    low = "lightblue", high = "darkblue"
-  ) +
-  labs(
-    x = "Immigrant mother participation in further education,\nlast 12 months rate",
-    y = "Reading skills of immigrant mothers,\npopulation weighted average",
-    title = "Further Education and Reading Skills of Immigrant Mothers"
-    #, subtitle = "Point size shows skill gap with native mothers"
-  ) +
-  theme_minimal() 
-
-
-
-
-```
-
-### Figure X. FET and Skills Gap
-
-
-There is a strong association of having a larger gap in further education participation between natives and immigrant mothers (x-axis) and the readings skills gap between natives and immigrant mothers (y-axis) (r = `r cor_coef2`, p = `r cor_pval2`).
-
-
-
-```{r}
-
-ggplot(plot_data, aes(x = fet_gap, y = skill_gap)) +
-  geom_point(aes(color = percent_immigrant), size = 4) +
-  geom_text_repel(aes(label = iso3c), size = 3, max.overlaps = Inf) +
-  guides(
-    size = "none",
-    color = guide_colorbar(title = "Immigrant\nmothers\n% of pop.")
-  ) +
-  scale_color_gradient(
-    name = "Percent immigrant mothers",
-    low = "lightblue", high = "darkblue"
-  ) +
-  labs(
-    x = "Further education participation of mothers,\nnative-immigrant average gap",
-    y = "Reading skills of mothers,\nnative-immigrant average gap",
-    title = "Further Education and Reading Skill Gaps\nof Mothers by Immigration Background"
-    #, subtitle = "Point size shows skill gap with native mothers"
-  ) +
-  theme_minimal()
-
-```
-
 ## Table S1. Descriptives
 
 ### Women
@@ -467,6 +283,12 @@ table_1out %>%
 
 table_1out  %>% kable("html", digits = 2, caption = "Descriptive Statistics") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+write.csv(
+  table_1out,
+  file = here("Results", "TS1f.csv"),
+  row.names = FALSE
+)
 
 
 ```
@@ -541,8 +363,15 @@ table_1outa %>%
 table_1outa  %>% kable("html", digits = 2, caption = "Descriptive Statistics") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
 
+write.csv(
+  table_1outa,
+  file = here("Results", "TS1m.csv"),
+  row.names = FALSE
+)
+
 
 ```
+
 ### Foreign-born, non-native
 
 ```{r}
@@ -623,7 +452,6 @@ table_output
 ### Basic
 
 We do not use the weighting variables here because we are focusing in on specific groups, and the weights are for the full population.
-
 
 
 ```{r}
