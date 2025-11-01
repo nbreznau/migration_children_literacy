@@ -1,4 +1,4 @@
-calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars, assign_to_env = TRUE) {
+calc_groups_pv_basic <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars, assign_to_env = TRUE) {
   library(survey)
   
   svymean_coef <- function(var, des) {

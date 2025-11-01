@@ -74,7 +74,7 @@ df2_rep <- svrepdesign(
 
 # helper function to identify rep means/SD for sub-groups
 
-source(here("Sub", "IRT_helper_groups.R"))
+source(here("Sub", "IRT_helper_groups_se.R"))
 
 pvlit <- paste0("PVLIT", 1:10)
 pvnum <- paste0("PVNUM", 1:10)
@@ -88,6 +88,9 @@ pvnum <- paste0("PVNUM", 1:10)
 Run the routine country_loop.R once and then simply load the results thereafter as the saved object plot_df.RData
 
 ```{r}
+# this is the basic version, it does not calculate Rubin/Little SEs
+
+load(here("Sub", "IRT_helper_groups.R"))
 
 # source(here("Sub", "country_loop.R"))
 
@@ -374,11 +377,174 @@ table_output
     group_vars   = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
   )
 
+# combine all objects into a df
+source(here("Sub", "combine_g_objects.R"))
+
+# remove raw objects
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
+
 ```
 
 ### Plot
 
 ```{r}
+df_a2 <- df_lit %>%
+  filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
+  select(group_label, mean) %>%
+  drop_na(mean)
+
+# ChatGPT made this pretty cool hierarchy routine
+parent_of <- function(label) {
+  if (label == "ALL") return(NA_character_)
+  if (!str_detect(label, "_")) return("ALL")
+  sub("_[^_]+$", "", label)
+}
+
+depth_of <- function(label) {
+  if (label == "ALL") return(0L)
+  str_count(label, "_") + 1L
+}
+
+df_a2 <- df_a2 %>%
+  mutate(
+    depth = vapply(group_label, depth_of, integer(1)),
+    parent = vapply(group_label, parent_of, character(1))
+  )
+
+# Add group labels
+df_a2 <- df_a2 %>%
+  mutate(plot_label = case_match(group_label,
+                                 "ALL" ~ "Entire Population",
+                                 "male" ~ "Male",
+                                 "female" ~ "Female",
+                                 "male_not" ~ "Native-born",
+                                 "male_fb" ~ "Foreign-born",
+                                 "female_not" ~ "Native-born",
+                                 "female_fb" ~ "Foreign-born",
+                                 "male_not_natlang" ~ "Native",
+                                 "male_fb_natlang" ~ "Native",
+                                 "female_not_natlang" ~ "Native",
+                                 "female_fb_natlang" ~ "Native",
+                                 "male_not_notnatlang" ~ "Non-native",
+                                 "male_fb_notnatlang" ~ "Non-native",
+                                 "female_not_notnatlang" ~ "Non-native",
+                                 "female_fb_notnatlang" ~ "Non-native",
+                                 "male_not_natlang_child" ~ "Parent",
+                                 "male_fb_natlang_child" ~ "Parent",
+                                 "female_not_natlang_child" ~ "Parent",
+                                 "female_fb_natlang_child" ~ "Parent",
+                                 "male_not_notnatlang_child" ~ "Parent",
+                                 "male_fb_notnatlang_child" ~ "Parent",
+                                 "female_not_notnatlang_child" ~ "Parent",
+                                 "female_fb_notnatlang_child" ~ "Parent",
+                                 "male_not_natlang_nochild" ~ "Childless",
+                                 "male_fb_natlang_nochild" ~ "Childless",
+                                 "female_not_natlang_nochild" ~ "Childless",
+                                 "female_fb_natlang_nochild" ~ "Childless",
+                                 "male_not_notnatlang_nochild" ~ "Childless",
+                                 "male_fb_notnatlang_nochild" ~ "Childless",
+                                 "female_not_notnatlang_nochild" ~ "Childless",
+                                 "female_fb_notnatlang_nochild" ~ "Childless"))
+
+
+labels <- df_a2$group_label
+children_map <- df_a2 %>%
+  select(group_label, parent) %>%
+  filter(!is.na(parent), parent %in% labels) %>%
+  arrange(parent, group_label) %>%
+  group_by(parent) %>%
+  summarise(children = list(group_label), .groups = "drop") %>%
+  deframe()
+
+# Ensure every label is a key (even if it has no children)
+for (lab in labels) if (is.null(children_map[[lab]])) children_map[[lab]] <- character(0)
+
+max_depth <- max(df_a2$depth, na.rm = TRUE)
+
+# Assign x recursively 
+x_pos <- setNames(rep(NA_real_, length(labels)), labels)
+
+assign_positions <- function(node, depth, x) {
+  x_pos[[node]] <<- x
+  ch <- children_map[[node]]
+  if (length(ch) == 2) {
+    # symmetric left/right offset that shrinks with depth
+    offset <- 2^(max_depth - depth - 1)
+    assign_positions(ch[1], depth + 1, x - offset)
+    assign_positions(ch[2], depth + 1, x + offset)
+  } else if (length(ch) == 1) {
+    # single child straight below (although this case doesn't exist in these groupings)
+    assign_positions(ch[1], depth + 1, x)
+  }
+}
+
+root <- if ("ALL" %in% labels) "ALL" else df_a2 %>% arrange(depth) %>% slice(1) %>% pull(group_label)
+assign_positions(root, 0L, 0)
+
+# Top is y=0, then working down (by going up in count)
+df_a2 <- df_a2 %>%
+  mutate(
+    x = unname(x_pos[group_label]),
+    y = depth
+  )
+
+#conmecting lines
+edges <- df_a2 %>%
+  #mutate(y = y + 1) %>%
+  select(child = group_label, xend = x, yend = y, parent) %>%
+  left_join(df_a2 %>% select(parent = group_label, x, y),
+            by = "parent", relationship = "many-to-one") %>%
+  filter(!is.na(parent))
+```
+
+
+```{r}
+
+agg_png(here("Results", "Fig2A.png"), res = 144, width = 800, height = 550)
+
+p <- ggplot(df_a2, aes(x = x, y = y, color = mean)) +
+  geom_segment(
+    data = edges,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    color = "grey75",
+    linetype = "dotted"
+  ) +
+  geom_point(size = 5) +
+  geom_text(
+    aes(label = round(mean, 0)), 
+    vjust = -2.2, 
+    size = 2.2, 
+    color = "black"
+    ) +
+  geom_text(
+    aes(label = plot_label),
+    vjust = 3,
+    size = 1.7,
+    color = "black"
+    ) +
+  scale_color_viridis_c(name = "Literacy") +
+  scale_y_reverse(
+    breaks = 0:4,
+    labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
+    limits = c(4.1,-0.1)
+    ) +
+  labs(
+    x = NULL, y = "Group Splits",
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+p
+
+dev.off()
+
+include_graphics(here("Results", "Fig2A.png"))
 
 
 

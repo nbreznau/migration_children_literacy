@@ -45,7 +45,7 @@ res_country_all <- do.call(rbind, lapply(iso_vec, function(cc) {
                      error = function(e) subset(df2_rep, FALSE))
   
   # script defined in IRT_helper_groups.R
-  out <- calc_groups_pv(
+  out <- calc_groups_pv_basic(
     df1_rep = des1_c,
     df2_rep = des2_c,
     pvlit   = pvlit,
