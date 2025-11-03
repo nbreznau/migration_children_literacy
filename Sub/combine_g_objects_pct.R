@@ -14,28 +14,24 @@ cycles <- c("df1", "df2")                           # cycle 1 and 2
 
 # helper to fetch mean/se for a group-cycle pair, safely
 fetch_stats <- function(g, cyc) {
-  mean_name <- paste0(g, "_mean_lit_", cyc)
-  se_name   <- paste0(g, "_se_lit_",   cyc)
+  mean_name <- paste0(g, "_pct_lit01_", cyc)
   
   mean_val <- get0(mean_name, ifnotfound = NA_real_)
-  se_val   <- get0(se_name,   ifnotfound = NA_real_)
   
   tibble(
     group = g,
     cycle = cyc,
-    mean  = as.numeric(mean_val),
-    se    = as.numeric(se_val)
+    pct  = as.numeric(mean_val)
   )
 }
 
 # build the long table
-df_lit <- map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats(g, cyc))) |>
+df_pct_level_1_or_less <- map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats(g, cyc))) |>
   mutate(
     # attach pretty label in same order as groups
     group_label = group_labels[as.integer(sub("^g", "", group))],
     # round as requested
-    mean = round(mean, 1),
-    se   = round(se, 2)
+    pct = round(pct, 2)
   ) |>
   # optional: order factors nicely
   mutate(
@@ -45,4 +41,4 @@ df_lit <- map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats(g, cyc))) |>
   )
 
 # peek
-df_lit
+df_pct_level_1_or_less

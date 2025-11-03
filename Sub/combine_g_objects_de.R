@@ -29,7 +29,7 @@ fetch_stats <- function(g, cyc) {
 }
 
 # build the long table
-df_lit <- map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats(g, cyc))) |>
+df_lit_de <- map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats(g, cyc))) |>
   mutate(
     # attach pretty label in same order as groups
     group_label = group_labels[as.integer(sub("^g", "", group))],
@@ -45,4 +45,4 @@ df_lit <- map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats(g, cyc))) |>
   )
 
 # peek
-df_lit
+df_lit_de
