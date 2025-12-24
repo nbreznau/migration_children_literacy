@@ -1,0 +1,1138 @@
+---
+title: "Parenthood, Immigration and Further Education"
+subtitle: "Analyses and Visualizations"
+author: "Nate Breznau, Johannes Bonnes and Sylvia Rahn"
+output:
+  word_document:
+    toc: true
+    toc_depth: '1'
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    toc_depth: 1
+  pdf_document:
+    toc: true
+    toc_depth: '1'
+---
+
+NOTE: Linking error is necessary to compare SE across cycles. See ChatGPT output for a reccomendation for how to integrate it. 
+
+## Setup   
+
+```{r setup, echo = F, warning = F, message = F}
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+packages <- c('tidyverse',
+              'readr',
+              'knitr',
+              'here',
+              'ggplot2',
+              'ggrepel',
+              'ragg',
+              'kableExtra',
+              'countrycode',
+              'readxl',
+              'jtools',
+              'lme4',
+              'lmerTest',
+              'broom.mixed',
+              'viridis',
+              'survey',
+              'wbstats')
+
+pacman::p_load(packages, character.only = T)
+
+```
+
+## Data
+
+```{r }
+
+
+df <- read_rds(here("Data", "df.RDS")) 
+df2 <- read_rds(here("Data", "df2.RDS")) 
+
+# basic or lower literacy
+df2 <- df2 %>%
+  mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0),
+         ALL = 1)
+
+df <- df %>%
+  mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0),
+         ALL = 1)
+
+europe <- c("AUT", "BEL", "CHE", "CZE", "DEU", "DNK", "ESP", "EST", "FIN", "FRA", "GBR", "HRV", "HUN", "IRL", "ITA", "LTU", "LVA", "NOR", "POL", "PRT", "SVK", "SWE")
+
+rich <- c("AUT", "BEL", "CHE", "DEU", "DNK", "ESP", "FIN", "FRA", "GBR", "IRL", "ITA", "NOR", "PRT", "SWE", "JPN", "CAN", "USA", "AUS", "NZL")
+
+dfeurope <- subset(df, iso3c %in% europe)
+df2europe <- subset(df2, iso3c %in% europe)
+
+dfrich <- subset(df, iso3c %in% rich)
+df2rich <- subset(df2, iso3c %in% rich)
+
+dfde <- subset(df, iso3c == "DEU")
+df2de <- subset(df2, iso3c == "DEU")
+
+# for repeated measures means
+df1_rep <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = df[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = df)
+
+df2_rep <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = df2[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = df2)
+
+df1_rep_eur <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = dfeurope[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = dfeurope)
+
+df2_rep_eur <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = df2europe[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = df2europe)
+
+df1_rep_rich <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = dfrich[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = dfrich)
+
+df2_rep_rich <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = df2rich[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = df2rich)
+
+df1_rep_de <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = dfde[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = dfde)
+
+df2_rep_de <- svrepdesign(
+  weights = ~SPFWT0,
+  repweights = df2de[, paste0("SPFWT", 1:80)],
+  type = "Fay", rho = 0.5, mse = T, data = df2de)
+
+pvlit <- paste0("PVLIT", 1:10)
+pvnum <- paste0("PVNUM", 1:10)
+
+# helper function to identify rep means/SD for sub-groups
+
+source(here("Sub", "IRT_helper_groups_se_pop.R"))
+
+```
+
+## Fig A1. Immigrant Literacy 2012 and 2022
+
+### Get rates for each country
+
+Run the routine country_loop.R once and then simply load the results thereafter as the saved object plot_df.RData
+
+```{r}
+# this is the basic version, it does not calculate Rubin/Little SEs
+
+source(here("Sub", "IRT_helper_groups.R"))
+
+# source(here("Sub", "country_loop.R"))
+
+load(here("Data", "plot_df.RData"))
+
+```
+
+### Build
+
+```{r}
+
+agg_png(here("Results", "Fig1A.png"), res = 144, height = 600, width = 800)
+
+ggplot(plot_df, aes(x = iso3c, y = change_lit, fill = group)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Change in Literacy (Cycle 2, 2022 − Cycle 1, 2012)",
+    title = "Change in Mean Literacy between PIAAC Cycles",
+    caption = "NOTE: estimated with R survey package using repeated measures and population weights",
+    fill = NULL
+  ) +
+  scale_fill_manual(values = c("Immigrants" = "steelblue", "All adults" = "gray70")) +
+  theme_minimal() +
+  theme(legend.position = "top",
+        plot.caption = element_text(hjust = 0, size = 6, face = "italic"))
+
+dev.off()
+
+include_graphics(here("Results", "Fig1A.png"))
+
+```
+
+
+## Tbl A1. Immigration Increases 1990-2024
+
+UN. 2024. “Total Number of Emigrants: People That Were Born in a Country and Now Live in Another Country” [CSV]. Our World In Data: United Nations Department of Economic and Social Affairs. https://ourworldindata.org/migration.
+
+File downloaded
+
+
+```{r}
+
+df_un_mig <- read_csv(here("Data", "total-number-of-emigrants.filtered", "total-number-of-emigrants.csv"))
+
+continents <- c("Africa","Asia","Europe","North America","Oceania","South America")
+
+df_emig_out <- df_un_mig %>%
+  filter(Entity %in% continents, Year %in% c(1990, 2024)) %>%
+  select(Entity, Year, emigrants = `Total number of emigrants`) %>%
+  pivot_wider(names_from = Year, values_from = emigrants) %>%
+  transmute(
+    Entity,
+    emigrants_2024 = `2024`,
+    pct_change_1990_2024 = (`2024` - `1990`) / `1990` * 100
+  ) %>%
+  bind_rows(
+    df_un_mig %>%
+      filter(Entity %in% continents, Year %in% c(1990, 2024)) %>%
+      group_by(Year) %>%
+      summarise(emigrants = sum(`Total number of emigrants`, na.rm = TRUE), .groups="drop") %>%
+      pivot_wider(names_from = Year, values_from = emigrants) %>%
+      transmute(
+        Entity = "World",
+        emigrants_2024 = `2024`,
+        pct_change_1990_2024 = (`2024` - `1990`) / `1990` * 100
+      )
+  )
+
+source(here("Sub", "pop_2024.R"))
+
+# this does not include Oceania, quick Google info 46 mil in 2024
+
+df_pop_2024[7,1] <- "Oceania"
+df_pop_2024[7,2] <- 46000000
+
+df_2A <- df_emig_out %>%
+  left_join(df_pop_2024, by = "Entity")
+
+df_2A <- df_2A %>%
+  mutate(pct_fb_stock_2024 = round(100*(emigrants_2024/population_2024),1))
+
+rm(df_un_mig, df_emig_out, df_pop_2024)
+
+write.csv(df_2A, here("Results", "TS2.csv"), row.names = FALSE)
+
+rm(df_2A)
+
+```
+
+## Table S1. Descriptives
+
+### Women
+
+```{r}
+
+table_1 <- df2 %>%
+  subset(female == 1) %>%
+    mutate(
+    ed_primary   = ifelse(ed3 == 1, 1, 0),
+    ed_secondary = ifelse(ed3 == 2, 1, 0),
+    ed_tertiary  = ifelse(ed3 == 3, 1, 0),
+    missing = case_when(is.na(skill_reading) | is.na(NFE12) | is.na(FORBORN) | is.na(children) | is.na(FORLANG) | is.na(ed3) | is.na(ed_currently) ~ 1,
+                        .default = NA)
+    ) %>%
+  select(-ed3) %>%
+  select(iso3c, skill_reading, NFE12, FORBORN, children, FORLANG, ed_primary, ed_secondary, ed_tertiary, ed_currently, missing, aweight)
+
+  
+# drop countries that do not have all variables
+valid_countries <- table_1 %>%
+  group_by(iso3c) %>%
+  summarise(across(everything(), ~ sum(!is.na(.)))) %>%
+  filter(across(-iso3c, ~ . > 0)) %>%
+  pull(iso3c)
+
+table_1 <- table_1 %>%
+  filter(iso3c %in% valid_countries)
+
+table_1out <- table_1 %>%
+  select(-iso3c) %>%
+  summarise(across(
+    everything(),
+    list(
+      mean  = ~ mean(., na.rm = TRUE),
+      wmean = ~ weighted.mean(., aweight, na.rm = TRUE),
+      sd    = ~ sd(., na.rm = TRUE),
+      min   = ~ min(., na.rm = TRUE),
+      max   = ~ max(., na.rm = TRUE),
+      n     = ~ sum(!is.na(.))
+    ),
+    .names = "{.col}__{.fn}"
+  )) %>%
+  pivot_longer(
+    everything(),
+    names_to = c("variable", ".value"),
+    names_sep = "__"
+  ) %>%
+  mutate(variable = case_when(
+    variable == "skill_reading"   ~ "Literacy Skills",
+    variable == "NFE12"           ~ "ALE Participation",
+    variable == "FORBORN"         ~ "Foreign-Born",
+    variable == "children"        ~ "Has Children",
+    variable == "FORLANG"         ~ "Non-Native Speaker",
+    variable == "ed_currently"    ~ "Currently in Education",
+    variable == "ed_primary"      ~ "Primary Education",
+    variable == "ed_secondary"    ~ "Secondary Education",
+    variable == "ed_tertiary"     ~ "Tertiary Education",
+    variable == "missing"         ~ "Listwise Missing Cases",
+    TRUE ~ variable
+  ))
+
+# Save as HTML
+table_1out %>%
+  select(variable, mean, wmean, sd, min, max, n) %>%
+  kable("html", digits = 2, caption = "Descriptive Statistics with Weighted Means") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
+  save_kable(here("Results", "table_S1.html"))
+
+
+table_1out  %>% kable("html", digits = 2, caption = "Descriptive Statistics") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+write.csv(
+  table_1out,
+  file = here("Results", "TS1f.csv"),
+  row.names = FALSE
+)
+
+
+```
+
+### Men
+
+```{r}
+
+table_1a <- df2 %>%
+  subset(female == 0) %>%
+    mutate(
+    ed_primary   = ifelse(ed3 == 1, 1, 0),
+    ed_secondary = ifelse(ed3 == 2, 1, 0),
+    ed_tertiary  = ifelse(ed3 == 3, 1, 0),
+    missing = case_when(is.na(skill_reading) | is.na(NFE12) | is.na(FORBORN) | is.na(children) | is.na(FORLANG) | is.na(ed3) | is.na(ed_currently) ~ 1,
+                        .default = NA)
+    ) %>%
+  select(-ed3) %>%
+  select(iso3c, skill_reading, NFE12, FORBORN, children, FORLANG, ed_primary, ed_secondary, ed_tertiary, ed_currently, missing, aweight)
+
+  
+# drop countries that do not have all variables
+valid_countries <- table_1a %>%
+  group_by(iso3c) %>%
+  summarise(across(everything(), ~ sum(!is.na(.)))) %>%
+  filter(across(-iso3c, ~ . > 0)) %>%
+  pull(iso3c)
+
+table_1a <- table_1a %>%
+  filter(iso3c %in% valid_countries)
+
+table_1outa <- table_1a %>%
+  select(-iso3c) %>%
+  summarise(across(
+    everything(),
+    list(
+      mean  = ~ mean(., na.rm = TRUE),
+      wmean = ~ weighted.mean(., aweight, na.rm = TRUE),
+      sd    = ~ sd(., na.rm = TRUE),
+      min   = ~ min(., na.rm = TRUE),
+      max   = ~ max(., na.rm = TRUE),
+      n     = ~ sum(!is.na(.))
+    ),
+    .names = "{.col}__{.fn}"
+  )) %>%
+  pivot_longer(
+    everything(),
+    names_to = c("variable", ".value"),
+    names_sep = "__"
+  ) %>%
+  mutate(variable = case_when(
+    variable == "skill_reading"   ~ "Literacy Skills",
+    variable == "NFE12"           ~ "ALE Participation",
+    variable == "FORBORN"         ~ "Foreign-Born",
+    variable == "children"        ~ "Has Children",
+    variable == "FORLANG"         ~ "Non-Native Speaker",
+    variable == "ed_currently"    ~ "Currently in Education",
+    variable == "ed_primary"      ~ "Primary Education",
+    variable == "ed_secondary"    ~ "Secondary Education",
+    variable == "ed_tertiary"     ~ "Tertiary Education",
+    variable == "missing"         ~ "Listwise Missing Cases",
+    TRUE ~ variable
+  ))
+
+# Save as HTML
+table_1outa %>%
+  select(variable, mean, wmean, sd, min, max, n) %>%
+  kable("html", digits = 2, caption = "Descriptive Statistics with Weighted Means") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
+  save_kable(here("Results", "table_S1.html"))
+
+table_1outa  %>% kable("html", digits = 2, caption = "Descriptive Statistics") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+write.csv(
+  table_1outa,
+  file = here("Results", "TS1m.csv"),
+  row.names = FALSE
+)
+
+
+```
+
+### Foreign-born, non-native
+
+```{r}
+
+
+# Helper function to summarize a group
+summarize_group <- function(data) {
+  data %>%
+    mutate(
+      ed_primary   = ifelse(ed3 == 1, 1, 0),
+      ed_secondary = ifelse(ed3 == 2, 1, 0),
+      ed_tertiary  = ifelse(ed3 == 3, 1, 0)
+    ) %>%
+    summarise(across(
+      c(skill_reading, NFE12, FORBORN, children, FORLANG,
+        ed_primary, ed_secondary, ed_tertiary, ed_currently),
+      list(
+        mean = ~ mean(.x, na.rm = TRUE),
+        wmean = ~ weighted.mean(.x, aweight, na.rm = TRUE)
+      ),
+      .names = "{.col}__{.fn}"
+    )) %>%
+    pivot_longer(
+      everything(),
+      names_to = c("variable", ".value"),
+      names_sep = "__"
+    )
+}
+
+# Summarize females
+female_sum <- df2 %>%
+  filter(female == 1, FORLANG == 1, FORBORN == 1) %>%
+  summarize_group()
+
+# Summarize males
+male_sum <- df2 %>%
+  filter(female == 0, FORLANG == 1, FORBORN == 1) %>%
+  summarize_group()
+
+# Combine both into one table
+table_summary <- female_sum %>%
+  rename(female_mean = mean, female_wmean = wmean) %>%
+  full_join(
+    male_sum %>%
+      rename(male_mean = mean, male_wmean = wmean),
+    by = "variable"
+  ) %>%
+  mutate(variable = case_when(
+    variable == "skill_reading"   ~ "Literacy Skills",
+    variable == "NFE12"           ~ "ALE Participation",
+    variable == "FORBORN"         ~ "Foreign-Born",
+    variable == "children"        ~ "Has Children",
+    variable == "FORLANG"         ~ "Non-Native Speaker",
+    variable == "ed_currently"    ~ "Currently in Education",
+    variable == "ed_primary"      ~ "Primary Education",
+    variable == "ed_secondary"    ~ "Secondary Education",
+    variable == "ed_tertiary"     ~ "Tertiary Education",
+    TRUE ~ variable
+  ))
+
+# Create formatted table
+table_output <- table_summary %>%
+  kable("html", digits = 2, caption = "Means and Weighted Means by Gender") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+# Save to HTML file
+save_kable(table_output, file = here::here("Results", "Table_S1ag.html"))
+
+# Print table to viewer
+table_output
+
+
+```
+
+## Fig A2. Intersectionality of Literacy
+
+### Define all groups
+
+#### All countries
+
+```{r}
+
+# helper defined in IRT_helper_groups.R
+calc_groups_pv(
+    df1_rep = df1_rep,
+    df2_rep = df2_rep,
+    pvlit   = pvlit,
+    pvnum   = NA,
+    group_vars   = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
+  )
+
+# combine all mean and se objects into a df
+source(here("Sub", "combine_g_objects.R"))
+
+# combine all pct of groups with PIAAC level at 1 or below
+source(here("Sub", "combine_g_objects_pct.R"))
+
+
+# remove raw objects
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+
+# give unique naming
+df_lit_all <- df_lit
+df_pct_level_1_or_less_all <- df_pct_level_1_or_less
+
+```
+
+#### Rich countries only
+
+These are destination countries
+
+```{r}
+calc_groups_pv(
+    df1_rep = df1_rep_rich,
+    df2_rep = df2_rep_rich,
+    pvlit   = pvlit,
+    pvnum   = NA,
+    group_vars   = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
+  )
+
+
+source(here("Sub", "combine_g_objects.R"))
+
+# PIAAC level at 1 or below
+source(here("Sub", "combine_g_objects_pct.R"))
+
+
+# remove raw objects
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+
+# unique names
+df_lit_rich <- df_lit
+df_pct_level_1_or_less_rich <- df_pct_level_1_or_less
+```
+
+#### Europe only
+
+```{r}
+
+calc_groups_pv(
+    df1_rep = df1_rep_eur,
+    df2_rep = df2_rep_eur,
+    pvlit   = pvlit,
+    pvnum   = NA,
+    group_vars   = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
+  )
+
+source(here("Sub", "combine_g_objects.R"))
+source(here("Sub", "combine_g_objects_pct.R"))
+
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+
+df_lit_eur <- df_lit
+df_pct_level_1_or_less_eur <- df_pct_level_1_or_less
+
+```
+
+#### Germany only
+
+This is out of curiosity 
+
+```{r}
+
+calc_groups_pv(
+    df1_rep = df1_rep_de, 
+    df2_rep = df2_rep_de,
+    pvlit   = pvlit,
+    pvnum   = NA,
+    group_vars   = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
+  )
+
+source(here("Sub", "combine_g_objects.R"))
+source(here("Sub", "combine_g_objects_pct.R"))
+
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+
+df_lit_de <- df_lit
+df_pct_level_1_or_less_de <- df_pct_level_1_or_less
+```
+
+### Plot
+
+```{r}
+df_a2 <- df_lit %>%
+  filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
+  select(group_label, mean) %>%
+  drop_na(mean)
+# europe
+
+# DE
+df_a2_de <- df_lit_de %>%
+  filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
+  select(group_label, mean) %>%
+  drop_na(mean)
+
+# ChatGPT made this pretty cool hierarchy routine
+parent_of <- function(label) {
+  if (label == "ALL") return(NA_character_)
+  if (!str_detect(label, "_")) return("ALL")
+  sub("_[^_]+$", "", label)
+}
+
+depth_of <- function(label) {
+  if (label == "ALL") return(0L)
+  str_count(label, "_") + 1L
+}
+
+df_a2 <- df_a2 %>%
+  mutate(
+    depth = vapply(group_label, depth_of, integer(1)),
+    parent = vapply(group_label, parent_of, character(1))
+  )
+
+# europe
+
+# DE
+df_a2_de <- df_a2_de %>%
+  mutate(
+    depth = vapply(group_label, depth_of, integer(1)),
+    parent = vapply(group_label, parent_of, character(1))
+  )
+
+# Add group labels
+df_a2 <- df_a2 %>%
+  mutate(plot_label = case_match(group_label,
+                                 "ALL" ~ "Entire Population",
+                                 "male" ~ "Male",
+                                 "female" ~ "Female",
+                                 "male_not" ~ "Native-born",
+                                 "male_fb" ~ "Foreign-born",
+                                 "female_not" ~ "Native-born",
+                                 "female_fb" ~ "Foreign-born",
+                                 "male_not_natlang" ~ "Native",
+                                 "male_fb_natlang" ~ "Native",
+                                 "female_not_natlang" ~ "Native",
+                                 "female_fb_natlang" ~ "Native",
+                                 "male_not_notnatlang" ~ "Non-native",
+                                 "male_fb_notnatlang" ~ "Non-native",
+                                 "female_not_notnatlang" ~ "Non-native",
+                                 "female_fb_notnatlang" ~ "Non-native",
+                                 "male_not_natlang_child" ~ "Parent",
+                                 "male_fb_natlang_child" ~ "Parent",
+                                 "female_not_natlang_child" ~ "Parent",
+                                 "female_fb_natlang_child" ~ "Parent",
+                                 "male_not_notnatlang_child" ~ "Parent",
+                                 "male_fb_notnatlang_child" ~ "Parent",
+                                 "female_not_notnatlang_child" ~ "Parent",
+                                 "female_fb_notnatlang_child" ~ "Parent",
+                                 "male_not_natlang_nochild" ~ "Childless",
+                                 "male_fb_natlang_nochild" ~ "Childless",
+                                 "female_not_natlang_nochild" ~ "Childless",
+                                 "female_fb_natlang_nochild" ~ "Childless",
+                                 "male_not_notnatlang_nochild" ~ "Childless",
+                                 "male_fb_notnatlang_nochild" ~ "Childless",
+                                 "female_not_notnatlang_nochild" ~ "Childless",
+                                 "female_fb_notnatlang_nochild" ~ "Childless"))
+
+# Add group labels Europe
+
+# Add group labels DE
+df_a2_de <- df_a2_de %>%
+  mutate(plot_label = case_match(group_label,
+                                 "ALL" ~ "Entire Population",
+                                 "male" ~ "Male",
+                                 "female" ~ "Female",
+                                 "male_not" ~ "Native-born",
+                                 "male_fb" ~ "Foreign-born",
+                                 "female_not" ~ "Native-born",
+                                 "female_fb" ~ "Foreign-born",
+                                 "male_not_natlang" ~ "Native",
+                                 "male_fb_natlang" ~ "Native",
+                                 "female_not_natlang" ~ "Native",
+                                 "female_fb_natlang" ~ "Native",
+                                 "male_not_notnatlang" ~ "Non-native",
+                                 "male_fb_notnatlang" ~ "Non-native",
+                                 "female_not_notnatlang" ~ "Non-native",
+                                 "female_fb_notnatlang" ~ "Non-native",
+                                 "male_not_natlang_child" ~ "Parent",
+                                 "male_fb_natlang_child" ~ "Parent",
+                                 "female_not_natlang_child" ~ "Parent",
+                                 "female_fb_natlang_child" ~ "Parent",
+                                 "male_not_notnatlang_child" ~ "Parent",
+                                 "male_fb_notnatlang_child" ~ "Parent",
+                                 "female_not_notnatlang_child" ~ "Parent",
+                                 "female_fb_notnatlang_child" ~ "Parent",
+                                 "male_not_natlang_nochild" ~ "Childless",
+                                 "male_fb_natlang_nochild" ~ "Childless",
+                                 "female_not_natlang_nochild" ~ "Childless",
+                                 "female_fb_natlang_nochild" ~ "Childless",
+                                 "male_not_notnatlang_nochild" ~ "Childless",
+                                 "male_fb_notnatlang_nochild" ~ "Childless",
+                                 "female_not_notnatlang_nochild" ~ "Childless",
+                                 "female_fb_notnatlang_nochild" ~ "Childless"))
+
+labels <- df_a2$group_label
+children_map <- df_a2 %>%
+  select(group_label, parent) %>%
+  filter(!is.na(parent), parent %in% labels) %>%
+  arrange(parent, group_label) %>%
+  group_by(parent) %>%
+  summarise(children = list(group_label), .groups = "drop") %>%
+  deframe()
+
+# Europe
+
+# DE
+labels_de <- df_a2_de$group_label
+children_map_de <- df_a2_de %>%
+  select(group_label, parent) %>%
+  filter(!is.na(parent), parent %in% labels_de) %>%
+  arrange(parent, group_label) %>%
+  group_by(parent) %>%
+  summarise(children = list(group_label), .groups = "drop") %>%
+  deframe()
+
+# Ensure every label is a key (even if it has no children)
+for (lab in labels) if (is.null(children_map[[lab]])) children_map[[lab]] <- character(0)
+
+for (lab in labels_de) if (is.null(children_map_de[[lab]])) children_map_de[[lab]] <- character(0)
+
+max_depth <- max(df_a2$depth, na.rm = TRUE)
+max_depth_de <- max(df_a2_de$depth, na.rm = TRUE)
+
+# Assign x recursively 
+x_pos <- setNames(rep(NA_real_, length(labels)), labels)
+
+x_pos_de <- setNames(rep(NA_real_, length(labels_de)), labels_de)
+
+assign_positions <- function(node, depth, x) {
+  x_pos[[node]] <<- x
+  ch <- children_map[[node]]
+  if (length(ch) == 2) {
+    # symmetric left/right offset that shrinks with depth
+    offset <- 2^(max_depth - depth - 1)
+    assign_positions(ch[1], depth + 1, x - offset)
+    assign_positions(ch[2], depth + 1, x + offset)
+  } else if (length(ch) == 1) {
+    # single child straight below (although this case doesn't exist in these groupings)
+    assign_positions(ch[1], depth + 1, x)
+  }
+}
+
+# DE
+assign_positions_de <- function(node, depth, x) {
+  x_pos_de[[node]] <<- x
+  ch <- children_map_de[[node]]                 # <-- was children_map[[node]]
+  if (length(ch) == 2) {
+    offset <- 2^(max_depth_de - depth - 1)      # <-- was max_depth
+    assign_positions_de(ch[1], depth + 1, x - offset)
+    assign_positions_de(ch[2], depth + 1, x + offset)
+  } else if (length(ch) == 1) {
+    assign_positions_de(ch[1], depth + 1, x)
+  }
+}
+
+root <- if ("ALL" %in% labels) "ALL" else df_a2 %>% arrange(depth) %>% slice(1) %>% pull(group_label)
+assign_positions(root, 0L, 0)
+
+# DE
+root_de <- if ("ALL" %in% labels_de) "ALL" else df_a2_de %>% arrange(depth) %>% slice(1) %>% pull(group_label)
+assign_positions_de(root_de, 0L, 0)
+
+# Top is y=0, then working down (by going up in count)
+df_a2 <- df_a2 %>%
+  mutate(
+    x = unname(x_pos[group_label]),
+    y = depth
+  )
+
+df_a2_de <- df_a2_de %>%
+  mutate(
+    x = unname(x_pos_de[group_label]),
+    y = depth
+  )
+
+#conmecting lines
+edges <- df_a2 %>%
+  #mutate(y = y + 1) %>%
+  select(child = group_label, xend = x, yend = y, parent) %>%
+  left_join(df_a2 %>% select(parent = group_label, x, y),
+            by = "parent", relationship = "many-to-one") %>%
+  filter(!is.na(parent))
+
+# DE
+edges_de <- df_a2_de %>%
+  #mutate(y = y + 1) %>%
+  select(child = group_label, xend = x, yend = y, parent) %>%
+  left_join(df_a2_de %>% select(parent = group_label, x, y),
+            by = "parent", relationship = "many-to-one") %>%
+  filter(!is.na(parent))
+
+```
+
+#### ALL PIAAC
+```{r}
+
+agg_png(here("Results", "Fig2A.png"), res = 576, width = 3200, height = 2200)
+
+p <- ggplot(df_a2, aes(x = x, y = y, color = mean)) +
+  geom_segment(
+    data = edges,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    color = "grey75",
+    linetype = "dotted"
+  ) +
+  geom_point(size = 5) +
+  geom_text(
+    aes(label = round(mean, 0)), 
+    vjust = -2.2, 
+    size = 2.2, 
+    color = "black"
+    ) +
+  geom_text(
+    aes(label = plot_label),
+    vjust = 3,
+    size = 1.7,
+    color = "black"
+    ) +
+  scale_color_viridis_c(name = "Literacy") +
+  scale_y_reverse(
+    breaks = 0:4,
+    labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
+    limits = c(4.1,-0.1)
+    ) +
+  labs(
+    x = NULL, y = "Group Splits",
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+p
+
+dev.off()
+
+include_graphics(here("Results", "Fig2A.png"))
+
+
+
+```
+
+
+
+#### DE ONLY
+```{r}
+
+agg_png(here("Results", "Fig2Ade.png"), res = 576, width = 3200, height = 2200)
+
+pde <- ggplot(df_a2_de, aes(x = x, y = y, color = mean)) +
+  geom_segment(
+    data = edges,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    color = "grey75",
+    linetype = "dotted"
+  ) +
+  geom_point(size = 5) +
+  geom_text(
+    aes(label = round(mean, 0)), 
+    vjust = -2.2, 
+    size = 2.2, 
+    color = "black"
+    ) +
+  geom_text(
+    aes(label = plot_label),
+    vjust = 3,
+    size = 1.7,
+    color = "black"
+    ) +
+  scale_color_viridis_c(name = "Literalität") +
+  scale_y_reverse(
+    breaks = 0:4,
+    labels = c("Alle", "Geschlecht", "Migration", "Sprache", "Elternschaft"),
+    limits = c(4.1,-0.1)
+    ) +
+  labs(
+    x = NULL, y = "Gruppenaufteilungen",
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+pde
+
+dev.off()
+
+include_graphics(here("Results", "Fig2Ade.png"))
+
+
+
+```
+
+## Fig A3 Percentage Tree
+
+```{r}
+# ==== Level 1-or-less percentage plotting data (Europe + DE) ====
+
+# 1) Helper: find and standardize the percentage column to 'mean'
+.pick_pct <- function(df) {
+  stopifnot(all(c("group_label") %in% names(df)))
+  # Common candidates you might have used
+  candidates <- c("pct_level_1_or_less", "pct_lvl10", "pct", "percent", "percentage",
+                  "share", "prop", "proportion", "value", "mean", "p")
+  have <- intersect(candidates, names(df))
+  if (length(have) == 0)
+    stop("Couldn't find a percentage-like column in the provided dataframe. ",
+         "Expected one of: ", paste(candidates, collapse = ", "))
+  # Keep cycle if present; always keep group_label; standardize value to 'mean'
+  keep <- c("group_label", "cycle", have[1])
+  df %>%
+    select(any_of(keep)) %>%
+    rename(mean = !!sym(have[1]))
+}
+
+# 2) Filter to Cycle 2 and standardize to 'mean'
+df_a2_lvl10 <- df_pct_level_1_or_less %>%
+  filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
+  .pick_pct() %>%
+  drop_na(mean)
+
+df_a2_lvl10_de <- df_pct_level_1_or_less_de %>%
+  filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
+  .pick_pct() %>%
+  drop_na(mean)
+
+# 3) Hierarchy helpers (same as your literacy-score code)
+parent_of <- function(label) {
+  if (label == "ALL") return(NA_character_)
+  if (!str_detect(label, "_")) return("ALL")
+  sub("_[^_]+$", "", label)
+}
+depth_of <- function(label) {
+  if (label == "ALL") return(0L)
+  str_count(label, "_") + 1L
+}
+
+# 4) Add depth/parent
+df_a2_lvl10 <- df_a2_lvl10 %>%
+  mutate(
+    depth  = vapply(group_label, depth_of, integer(1)),
+    parent = vapply(group_label, parent_of, character(1))
+  )
+df_a2_lvl10_de <- df_a2_lvl10_de %>%
+  mutate(
+    depth  = vapply(group_label, depth_of, integer(1)),
+    parent = vapply(group_label, parent_of, character(1))
+  )
+
+# 5) Plot-facing labels (mirror your mapping)
+label_map <- list(
+  "ALL" = "Entire Population",
+  "male" = "Male", "female" = "Female",
+  "male_not" = "Native-born", "male_fb" = "Foreign-born",
+  "female_not" = "Native-born", "female_fb" = "Foreign-born",
+  "male_not_natlang" = "Native", "male_fb_natlang" = "Native",
+  "female_not_natlang" = "Native", "female_fb_natlang" = "Native",
+  "male_not_notnatlang" = "Non-native", "male_fb_notnatlang" = "Non-native",
+  "female_not_notnatlang" = "Non-native", "female_fb_notnatlang" = "Non-native",
+  "male_not_natlang_child" = "Parent", "male_fb_natlang_child" = "Parent",
+  "female_not_natlang_child" = "Parent", "female_fb_natlang_child" = "Parent",
+  "male_not_notnatlang_child" = "Parent", "male_fb_notnatlang_child" = "Parent",
+  "female_not_notnatlang_child" = "Parent", "female_fb_notnatlang_child" = "Parent",
+  "male_not_natlang_nochild" = "Childless", "male_fb_natlang_nochild" = "Childless",
+  "female_not_natlang_nochild" = "Childless", "female_fb_natlang_nochild" = "Childless",
+  "male_not_notnatlang_nochild" = "Childless", "male_fb_notnatlang_nochild" = "Childless",
+  "female_not_notnatlang_nochild" = "Childless", "female_fb_notnatlang_nochild" = "Childless"
+)
+
+df_a2_lvl10 <- df_a2_lvl10 %>%
+  mutate(plot_label = coalesce(purrr::map_chr(group_label, ~label_map[[.x]] %||% NA_character_), group_label))
+df_a2_lvl10_de <- df_a2_lvl10_de %>%
+  mutate(plot_label = coalesce(purrr::map_chr(group_label, ~label_map[[.x]] %||% NA_character_), group_label))
+
+# 6) Children maps (Europe + DE kept separate to avoid x_pos NA issues)
+labels_lvl10 <- df_a2_lvl10$group_label
+children_map_lvl10 <- df_a2_lvl10 %>%
+  select(group_label, parent) %>%
+  filter(!is.na(parent), parent %in% labels_lvl10) %>%
+  arrange(parent, group_label) %>%
+  group_by(parent) %>%
+  summarise(children = list(group_label), .groups = "drop") %>%
+  deframe()
+
+labels_lvl10_de <- df_a2_lvl10_de$group_label
+children_map_lvl10_de <- df_a2_lvl10_de %>%
+  select(group_label, parent) %>%
+  filter(!is.na(parent), parent %in% labels_lvl10_de) %>%
+  arrange(parent, group_label) %>%
+  group_by(parent) %>%
+  summarise(children = list(group_label), .groups = "drop") %>%
+  deframe()
+
+for (lab in labels_lvl10)    if (is.null(children_map_lvl10[[lab]]))    children_map_lvl10[[lab]] <- character(0)
+for (lab in labels_lvl10_de) if (is.null(children_map_lvl10_de[[lab]])) children_map_lvl10_de[[lab]] <- character(0)
+
+# 7) Depths & x-positions
+max_depth_lvl10    <- max(df_a2_lvl10$depth,    na.rm = TRUE)
+max_depth_lvl10_de <- max(df_a2_lvl10_de$depth, na.rm = TRUE)
+
+x_pos_lvl10    <- setNames(rep(NA_real_, length(labels_lvl10)),    labels_lvl10)
+x_pos_lvl10_de <- setNames(rep(NA_real_, length(labels_lvl10_de)), labels_lvl10_de)
+
+assign_positions_lvl10 <- function(node, depth, x) {
+  x_pos_lvl10[[node]] <<- x
+  ch <- children_map_lvl10[[node]]
+  if (length(ch) == 2) {
+    offset <- 2^(max_depth_lvl10 - depth - 1)
+    assign_positions_lvl10(ch[1], depth + 1, x - offset)
+    assign_positions_lvl10(ch[2], depth + 1, x + offset)
+  } else if (length(ch) == 1) {
+    assign_positions_lvl10(ch[1], depth + 1, x)
+  }
+}
+assign_positions_lvl10_de <- function(node, depth, x) {
+  x_pos_lvl10_de[[node]] <<- x
+  ch <- children_map_lvl10_de[[node]]
+  if (length(ch) == 2) {
+    offset <- 2^(max_depth_lvl10_de - depth - 1)
+    assign_positions_lvl10_de(ch[1], depth + 1, x - offset)
+    assign_positions_lvl10_de(ch[2], depth + 1, x + offset)
+  } else if (length(ch) == 1) {
+    assign_positions_lvl10_de(ch[1], depth + 1, x)
+  }
+}
+
+root_lvl10    <- if ("ALL" %in% labels_lvl10)    "ALL" else df_a2_lvl10    %>% arrange(depth) %>% slice(1) %>% pull(group_label)
+root_lvl10_de <- if ("ALL" %in% labels_lvl10_de) "ALL" else df_a2_lvl10_de %>% arrange(depth) %>% slice(1) %>% pull(group_label)
+
+assign_positions_lvl10(root_lvl10, 0L, 0)
+assign_positions_lvl10_de(root_lvl10_de, 0L, 0)
+
+df_a2_lvl10 <- df_a2_lvl10 %>%
+  mutate(x = unname(x_pos_lvl10[group_label]),     y = depth)
+
+df_a2_lvl10_de <- df_a2_lvl10_de %>%
+  mutate(x = unname(x_pos_lvl10_de[group_label]),  y = depth)
+
+# 8) Connecting edges
+edges_lvl10 <- df_a2_lvl10 %>%
+  select(child = group_label, xend = x, yend = y, parent) %>%
+  left_join(df_a2_lvl10 %>% select(parent = group_label, x, y),
+            by = "parent", relationship = "many-to-one") %>%
+  filter(!is.na(parent))
+
+edges_lvl10_de <- df_a2_lvl10_de %>%
+  select(child = group_label, xend = x, yend = y, parent) %>%
+  left_join(df_a2_lvl10_de %>% select(parent = group_label, x, y),
+            by = "parent", relationship = "many-to-one") %>%
+  filter(!is.na(parent))
+
+
+```
+
+#### Plot All
+
+
+#### Plot DE
+
+```{r}
+
+agg_png(here("Results", "Fig3Ade.png"), res = 576, width = 3200, height = 2200)
+
+pde3 <- ggplot(df_a2_lvl10_de, aes(x = x, y = y, color = mean)) +
+  geom_segment(
+    data = edges_lvl10_de,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    color = "grey75",
+    linetype = "dotted"
+  ) +
+  geom_point(size = 5) +
+  geom_text(
+    aes(label = round(mean, 0)), 
+    vjust = -2.2, 
+    size = 2.2, 
+    color = "black"
+    ) +
+  geom_text(
+    aes(label = plot_label),
+    vjust = 3,
+    size = 1.7,
+    color = "black"
+    ) +
+  scale_color_viridis_c(name = "% in Literalität\nPIAAC Niveau 0 und 1") +
+  scale_y_reverse(
+    breaks = 0:4,
+    labels = c("Alle", "Geschlecht", "Migration", "Sprache", "Elternschaft"),
+    limits = c(4.1,-0.1)
+    ) +
+  labs(
+    x = NULL, y = "Gruppenaufteilungen",
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+pde3
+
+dev.off()
+
+include_graphics(here("Results", "Fig3Ade.png"))
+
+
+```
+
+
+
+
+
+
+## Citations
+
+```{r}
+
+packages %>%
+  map(citation) %>%
+  print(style = "text")
+
+```
+
+
+## Colophon
+
+```{r}
+
+sessionInfo()
+
+```
+
+
+
