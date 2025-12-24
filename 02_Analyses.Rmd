@@ -16,6 +16,7 @@ output:
     toc_depth: '1'
 ---
 
+NOTE: Linking error is necessary to compare SE across cycles. See ChatGPT output for a reccomendation for how to integrate it. 
 
 ## Setup   
 
@@ -38,7 +39,8 @@ packages <- c('tidyverse',
               'lmerTest',
               'broom.mixed',
               'viridis',
-              'survey')
+              'survey',
+              'wbstats')
 
 pacman::p_load(packages, character.only = T)
 
@@ -105,7 +107,7 @@ pvnum <- paste0("PVNUM", 1:10)
 
 # helper function to identify rep means/SD for sub-groups
 
-source(here("Sub", "IRT_helper_groups_se.R"))
+source(here("Sub", "IRT_helper_groups_se_pop.R"))
 
 ```
 
@@ -153,6 +155,62 @@ include_graphics(here("Results", "Fig1A.png"))
 
 ```
 
+
+## Tbl A1. Immigration Increases 1990-2024
+
+UN. 2024. “Total Number of Emigrants: People That Were Born in a Country and Now Live in Another Country” [CSV]. Our World In Data: United Nations Department of Economic and Social Affairs. https://ourworldindata.org/migration.
+
+File downloaded
+
+
+```{r}
+
+df_un_mig <- read_csv(here("Data", "total-number-of-emigrants.filtered", "total-number-of-emigrants.csv"))
+
+continents <- c("Africa","Asia","Europe","North America","Oceania","South America")
+
+df_emig_out <- df_un_mig %>%
+  filter(Entity %in% continents, Year %in% c(1990, 2024)) %>%
+  select(Entity, Year, emigrants = `Total number of emigrants`) %>%
+  pivot_wider(names_from = Year, values_from = emigrants) %>%
+  transmute(
+    Entity,
+    emigrants_2024 = `2024`,
+    pct_change_1990_2024 = (`2024` - `1990`) / `1990` * 100
+  ) %>%
+  bind_rows(
+    df_un_mig %>%
+      filter(Entity %in% continents, Year %in% c(1990, 2024)) %>%
+      group_by(Year) %>%
+      summarise(emigrants = sum(`Total number of emigrants`, na.rm = TRUE), .groups="drop") %>%
+      pivot_wider(names_from = Year, values_from = emigrants) %>%
+      transmute(
+        Entity = "World",
+        emigrants_2024 = `2024`,
+        pct_change_1990_2024 = (`2024` - `1990`) / `1990` * 100
+      )
+  )
+
+source(here("Sub", "pop_2024.R"))
+
+# this does not include Oceania, quick Google info 46 mil in 2024
+
+df_pop_2024[7,1] <- "Oceania"
+df_pop_2024[7,2] <- 46000000
+
+df_2A <- df_emig_out %>%
+  left_join(df_pop_2024, by = "Entity")
+
+df_2A <- df_2A %>%
+  mutate(pct_fb_stock_2024 = round(100*(emigrants_2024/population_2024),1))
+
+rm(df_un_mig, df_emig_out, df_pop_2024)
+
+write.csv(df_2A, here("Results", "TS2.csv"), row.names = FALSE)
+
+rm(df_2A)
+
+```
 
 ## Table S1. Descriptives
 
@@ -412,7 +470,6 @@ source(here("Sub", "combine_g_objects.R"))
 # combine all pct of groups with PIAAC niveau at 1 or below
 source(here("Sub", "combine_g_objects_pct.R"))
 
-df_pct_level_1_or_less
 
 # remove raw objects
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
@@ -671,7 +728,7 @@ edges_de <- df_a2_de %>%
 #### ALL PIAAC
 ```{r}
 
-agg_png(here("Results", "Fig2A.png"), res = 144, width = 800, height = 550)
+agg_png(here("Results", "Fig2A.png"), res = 576, width = 3200, height = 2200)
 
 p <- ggplot(df_a2, aes(x = x, y = y, color = mean)) +
   geom_segment(
@@ -720,10 +777,13 @@ include_graphics(here("Results", "Fig2A.png"))
 
 
 ```
+
+
+
 #### DE ONLY
 ```{r}
 
-agg_png(here("Results", "Fig2Ade.png"), res = 144, width = 800, height = 550)
+agg_png(here("Results", "Fig2Ade.png"), res = 576, width = 3200, height = 2200)
 
 pde <- ggplot(df_a2_de, aes(x = x, y = y, color = mean)) +
   geom_segment(
@@ -931,11 +991,6 @@ edges_lvl10_de <- df_a2_lvl10_de %>%
             by = "parent", relationship = "many-to-one") %>%
   filter(!is.na(parent))
 
-# ---- OPTIONAL: reuse original object names to plug straight into your plot code ----
-# df_a2    <- df_a2_lvl10
-# df_a2_de <- df_a2_lvl10_de
-# edges    <- edges_lvl10
-# edges_de <- edges_lvl10_de
 
 ```
 
@@ -946,7 +1001,7 @@ edges_lvl10_de <- df_a2_lvl10_de %>%
 
 ```{r}
 
-agg_png(here("Results", "Fig3Ade.png"), res = 144, width = 800, height = 550)
+agg_png(here("Results", "Fig3Ade.png"), res = 576, width = 3200, height = 2200)
 
 pde3 <- ggplot(df_a2_lvl10_de, aes(x = x, y = y, color = mean)) +
   geom_segment(
