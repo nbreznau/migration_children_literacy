@@ -16,7 +16,7 @@ output:
     toc_depth: '1'
 ---
 
-NOTE: Linking error is necessary to compare SE across cycles. See ChatGPT output for a reccomendation for how to integrate it. 
+NOTE: Linking error is necessary to compare SE across cycles. See ChatGPT output for a recommendation for how to integrate it. 
 
 ## Setup   
 
@@ -39,8 +39,7 @@ packages <- c('tidyverse',
               'lmerTest',
               'broom.mixed',
               'viridis',
-              'survey',
-              'wbstats')
+              'survey')
 
 pacman::p_load(packages, character.only = T)
 
@@ -54,15 +53,6 @@ pacman::p_load(packages, character.only = T)
 df <- read_rds(here("Data", "df.RDS")) 
 df2 <- read_rds(here("Data", "df2.RDS")) 
 
-# basic or lower literacy
-df2 <- df2 %>%
-  mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0),
-         ALL = 1)
-
-df <- df %>%
-  mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0),
-         ALL = 1)
-
 ```
 
 ## Regressions
@@ -73,17 +63,17 @@ We do not use the weighting variables here because we are focusing in on specifi
 
 
 ```{r}
-df_fem_imm <- subset(df2, FORBORN == 1 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & !is.na(ed_currently) & !is.na(female))
+df_imm <- subset(df2, FORBORN == 1 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & !is.na(ed_currently) & !is.na(female))
 
-df_fem_nat <- subset(df2, FORBORN == 0 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & !is.na(ed_currently) & !is.na(female))
+df_nat <- subset(df2, FORBORN == 0 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & !is.na(ed_currently) & !is.na(female))
 
-m1_imm_1 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + factor(iso3c), data = df_fem_imm)
+m1_imm_1 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + factor(iso3c), data = df_imm)
 
-m1_nat_1 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + factor(iso3c), data = df_fem_nat)
+m1_nat_1 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + factor(iso3c), data = df_nat)
 
-m1_imm_2 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + ed_currently + factor(iso3c), data = df_fem_imm)
+m1_imm_2 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + ed_currently + factor(iso3c), data = df_imm)
 
-m1_nat_2 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + ed_currently + factor(iso3c), data = df_fem_nat)
+m1_nat_2 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + ed_currently + factor(iso3c), data = df_nat)
 
 export_summs(
   m1_imm_1, m1_nat_1, m1_imm_2, m1_nat_2,
@@ -111,15 +101,15 @@ Here we correlate the residuals with the weighting variable. If this is close to
 
 ```{r}
 
-df_fem_imm$resid_imm_1 <- residuals(m1_imm_1)
-df_fem_nat$resid_nat_1 <- residuals(m1_nat_1)
-df_fem_imm$resid_imm_2 <- residuals(m1_imm_2)
-df_fem_nat$resid_nat_2 <- residuals(m1_nat_2)
+df_imm$resid_imm_1 <- residuals(m1_imm_1)
+df_nat$resid_nat_1 <- residuals(m1_nat_1)
+df_imm$resid_imm_2 <- residuals(m1_imm_2)
+df_nat$resid_nat_2 <- residuals(m1_nat_2)
 
-testcor1 <- cor(df_fem_imm$aweight, df_fem_imm$resid_imm_1)
-testcor2 <- cor(df_fem_imm$aweight, df_fem_imm$resid_imm_2)
-testcor3 <- cor(df_fem_nat$aweight, df_fem_nat$resid_nat_1)
-testcor4 <- cor(df_fem_nat$aweight, df_fem_nat$resid_nat_2)
+testcor1 <- cor(df_imm$aweight, df_imm$resid_imm_1)
+testcor2 <- cor(df_imm$aweight, df_imm$resid_imm_2)
+testcor3 <- cor(df_nat$aweight, df_nat$resid_nat_1)
+testcor4 <- cor(df_nat$aweight, df_nat$resid_nat_2)
 
 ```
 
@@ -131,26 +121,29 @@ Correlations are `r round(testcor1,2`, `r round(testcor2,2`, `r round(testcor3,2
 
 ```{r}
 
+library(dplyr)
 
 df2 <- df2 %>%
   mutate(
-    ed3_secondary = ifelse(ed3 == 2, 1, 0),
-    ed3_tertiary = ifelse(ed3 == 3, 1, 0)
+    ed3_secondary = as.integer(ed3 == 2),
+    ed3_tertiary  = as.integer(ed3 == 3)
   )
 
-# within/between decomposition
+# 1) within/between decomposition (weighted country means)
 df2 <- df2 %>%
   group_by(iso3c) %>%
   mutate(
-    # weighted means are necessary at the country level
     NFE12_between = sum(SPFWT0 * NFE12, na.rm = TRUE) / sum(SPFWT0[!is.na(NFE12)], na.rm = TRUE),
-    female_between = sum(SPFWT0 * female, na.rm = T) / sum(SPFWT0[!is.na(female)], na.rm = T),
+    female_between = sum(SPFWT0 * female, na.rm = TRUE) / sum(SPFWT0[!is.na(female)], na.rm = TRUE),
     children_between = sum(SPFWT0 * children, na.rm = TRUE) / sum(SPFWT0[!is.na(children)], na.rm = TRUE),
     ed_currently_between = sum(SPFWT0 * ed_currently, na.rm = TRUE) / sum(SPFWT0[!is.na(ed_currently)], na.rm = TRUE),
     ed3_secondary_between = sum(SPFWT0 * ed3_secondary, na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_secondary)], na.rm = TRUE),
-    ed3_tertiary_between = sum(SPFWT0 * ed3_tertiary, na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_tertiary)], na.rm = TRUE),
-    forborn_between = sum(SPFWT0 * FORLANG, na.rm = TRUE) / sum(SPFWT0[!is.na(FORLANG)], na.rm = TRUE),
-    forlang_between = sum(SPFWT0 * FORBORN, na.rm = TRUE) / sum(SPFWT0[!is.na(FORBORN)], na.rm = TRUE),
+    ed3_tertiary_between  = sum(SPFWT0 * ed3_tertiary,  na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_tertiary)],  na.rm = TRUE),
+
+    # (note: you had FORLANG/FORBORN swapped in your original; keeping your naming but fixing logic)
+    forborn_between = sum(SPFWT0 * FORBORN, na.rm = TRUE) / sum(SPFWT0[!is.na(FORBORN)], na.rm = TRUE),
+    forlang_between = sum(SPFWT0 * FORLANG, na.rm = TRUE) / sum(SPFWT0[!is.na(FORLANG)], na.rm = TRUE),
+
     NFE12_within = NFE12 - NFE12_between,
     children_within = children - children_between,
     female_within = female - female_between,
@@ -162,34 +155,69 @@ df2 <- df2 %>%
   ) %>%
   ungroup()
 
+# the within effects need to be further centered by group 
 
-# the within effects need to be further centered by group
-df2_imm <- df2 %>%
-  subset(FORBORN == 1) %>%
-  group_by(iso3c) %>%
-  mutate(
-    NFE12_within = NFE12_within - mean(NFE12_within, na.rm = TRUE),
-    female_within = female_within - mean(female_within, na.rm = T),
-    children_within = children_within - mean(children_within, na.rm = TRUE),
-    ed_currently_within = ed_currently_within - mean(ed_currently_within, na.rm = TRUE),
-    ed3_secondary_within = ed3_secondary_within - mean(ed3_secondary_within, na.rm = TRUE),
-    ed3_tertiary_within = ed3_tertiary_within - mean(ed3_tertiary_within, na.rm = TRUE)
-  ) %>%
-  ungroup()
+df2_imm <- df2 %>% 
+  subset(FORBORN == 1) %>% 
+  group_by(iso3c) %>% 
+  mutate(NFE12_within = NFE12_within - mean(NFE12_within, na.rm = TRUE), 
+         female_within = female_within - mean(female_within, na.rm = T), 
+         children_within = children_within - mean(children_within, na.rm = TRUE), 
+         ed_currently_within = ed_currently_within - mean(ed_currently_within, na.rm = TRUE), 
+         ed3_secondary_within = ed3_secondary_within - mean(ed3_secondary_within, na.rm = TRUE), 
+         ed3_tertiary_within = ed3_tertiary_within - mean(ed3_tertiary_within, na.rm = TRUE) ) %>% 
+  ungroup() 
 
-df2_nat <- df2 %>%
-  subset(FORBORN == 0) %>%
-  group_by(iso3c) %>%
-  mutate(
-    NFE12_within = NFE12_within - mean(NFE12_within, na.rm = TRUE),
-    children_within = children_within - mean(children_within, na.rm = TRUE),
-    female_within = female_within - mean(female_within, na.rm = T),
-    ed_currently_within = ed_currently_within - mean(ed_currently_within, na.rm = TRUE),
-    ed3_secondary_within = ed3_secondary_within - mean(ed3_secondary_within, na.rm = TRUE),
-    ed3_tertiary_within = ed3_tertiary_within - mean(ed3_tertiary_within, na.rm = TRUE)
-  ) %>%
-  ungroup()
 
+df2_nat <- df2 %>% 
+  subset(FORBORN_not == 1) %>% 
+  group_by(iso3c) %>% 
+  mutate(NFE12_within = NFE12_within - mean(NFE12_within, na.rm = TRUE),
+         children_within = children_within - mean(children_within, na.rm = TRUE), 
+         female_within = female_within - mean(female_within, na.rm = T), 
+         ed_currently_within = ed_currently_within - mean(ed_currently_within, na.rm = TRUE), 
+         ed3_secondary_within = ed3_secondary_within - mean(ed3_secondary_within, na.rm = TRUE), 
+          ed3_tertiary_within = ed3_tertiary_within - mean(ed3_tertiary_within, na.rm = TRUE) ) %>% ungroup()
+
+between_vars <- c(
+  "NFE12_between", "female_between", "children_between",
+  "ed_currently_between", "ed3_secondary_between", "ed3_tertiary_between",
+  "forborn_between", "forlang_between"
+)
+
+# build country-level x-standardized-scored between 
+country_between_scaled <- function(dat, between_vars, suffix = "_z") {
+
+  # get one row per country (so no implicit weighting by country sample size)
+  country_vals <- dat %>%
+    distinct(iso3c, across(all_of(between_vars)))
+
+  # z-score across countries
+  country_z <- country_vals %>%
+    mutate(
+      across(all_of(between_vars), ~{
+        m <- mean(.x, na.rm = TRUE)
+        s <- sd(.x, na.rm = TRUE)
+        if (is.na(s) || s == 0) NA_real_ else as.numeric((.x - m) / s)
+      }, .names = paste0("{.col}", suffix))
+    ) %>%
+    select(iso3c, ends_with(suffix))
+
+  country_z
+}
+
+
+# df2
+df2 <- df2 %>%
+  left_join(country_between_scaled(df2, between_vars), by = "iso3c")
+
+# df2_imm
+df2_imm <- df2_imm %>%
+  left_join(country_between_scaled(df2_imm, between_vars), by = "iso3c")
+
+# df2_nat
+df2_nat <- df2_nat %>%
+  left_join(country_between_scaled(df2_nat, between_vars), by = "iso3c")
 ```
 
 
@@ -201,13 +229,13 @@ We first look at immigrants and native-born separately. Then we combine them to 
 
 m1_imm_mlm <- lmer(
   skill_reading ~ 
-    NFE12_within + NFE12_between +
-    female_within + female_between +
-    children_within + children_between +
-    forlang_within + forlang_between +
-    #ed_currently_within + ed_currently_between +
-    ed3_secondary_within + ed3_secondary_between +
-    ed3_tertiary_within + ed3_tertiary_between +
+    NFE12_within + NFE12_between_z +
+    female_within + female_between_z +
+    children_within + children_between_z +
+    forlang_within + forlang_between_z +
+    #ed_currently_within + ed_currently_between_z +
+    ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc +
     (1 | iso3c),
   data = df2_imm
@@ -222,13 +250,13 @@ iso3c_intercepts <- ranef_list$iso3c
 
 m1_nat_mlm <- lmer(
   skill_reading ~ 
-    NFE12_within + NFE12_between +
-    female_within + female_between +
-    children_within + children_between +
-    forlang_within + forlang_between +
-    #ed_currently_within + ed_currently_between +
-    ed3_secondary_within + ed3_secondary_between +
-    ed3_tertiary_within + ed3_tertiary_between +
+    NFE12_within + NFE12_between_z +
+    female_within + female_between_z +
+    children_within + children_between_z +
+    forlang_within + forlang_between_z +
+    #ed_currently_within + ed_currently_between_z +
+    ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc +
     (1 | iso3c),
   data = df2_nat
@@ -236,14 +264,14 @@ m1_nat_mlm <- lmer(
 
 m2 <- lmer(
   skill_reading ~ 
-    NFE12_within + NFE12_between +
-    children_within + children_between +
-    female_within + female_between +
-    forlang_within + forlang_between +
-    forborn_within + forborn_between +
-    #ed_currently_within + ed_currently_between +
-    ed3_secondary_within + ed3_secondary_between +
-    ed3_tertiary_within + ed3_tertiary_between +
+    NFE12_within + NFE12_between_z +
+    children_within + children_between_z +
+    female_within + female_between_z +
+    forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z +
+    #ed_currently_within + ed_currently_between_z +
+    ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc +
     (1 | iso3c),
   data = subset(df2)
@@ -251,15 +279,15 @@ m2 <- lmer(
 
 m3 <- lmer(
   skill_reading ~ 
-    NFE12_within + NFE12_between +
-    children_within + children_between +
-    female_within + female_between +
-    forlang_within + forlang_between +
-    forborn_within + forborn_between +
+    NFE12_within + NFE12_between_z +
+    children_within + children_between_z +
+    female_within + female_between_z +
+    forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z +
     forborn_within*NFE12_within +
-    #ed_currently_within + ed_currently_between +
-    ed3_secondary_within + ed3_secondary_between +
-    ed3_tertiary_within + ed3_tertiary_between +
+    #ed_currently_within + ed_currently_between_z +
+    ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc +
     (1 | iso3c),
   data = subset(df2)
@@ -313,16 +341,16 @@ FORLANG 0.5645113 1.0000000
 ```{r}
 m4 <- lmer(
   skill_reading ~ 
-    NFE12_within + NFE12_between +
-    female_within + female_between + 
-    children_within + children_between +
-    forlang_within + forlang_between +
-    forborn_within + forborn_between +
+    NFE12_within + NFE12_between_z +
+    female_within + female_between_z + 
+    children_within + children_between_z +
+    forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z +
     # interaction with all sub-interactions
     female_within*forborn_within*children_within*forlang_within*NFE12_within +
-    #ed_currently_within + ed_currently_between +
-    ed3_secondary_within + ed3_secondary_between +
-    ed3_tertiary_within + ed3_tertiary_between +
+    #ed_currently_within + ed_currently_between_z +
+    ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc +
     (1 | iso3c),
   data = subset(df2)
@@ -334,19 +362,19 @@ export_summs(
   coefs = c(
     "(Intercept)" = "(Intercept)",
     "ALE (within)" = "NFE12_within",
-    "ALE (between)" = "NFE12_between",
+    "ALE (between)" = "NFE12_between_z",
     "Female (within)" = "female_within",
-    "Female (between)" = "female_between",
+    "Female (between)" = "female_between_z",
     "Children (within)" = "children_within",
-    "Children (between)" = "children_between",
+    "Children (between)" = "children_between_z",
     "Non-native speaker (within)" = "forlang_within",
-    "Non-native speaker (between)" = "forlang_between",
+    "Non-native speaker (between)" = "forlang_between_z",
     "Foreign-born (within)" = "forborn_within",
-    "Foreign-born (between)" = "forborn_between",
+    "Foreign-born (between)" = "forborn_between_z",
     "Secondary education (within)" = "ed3_secondary_within",
-    "Secondary education (between)" = "ed3_secondary_between",
+    "Secondary education (between)" = "ed3_secondary_between_z",
     "Tertiary education (within)" = "ed3_tertiary_within",
-    "Tertiary education (between)" = "ed3_tertiary_between",
+    "Tertiary education (between)" = "ed3_tertiary_between_z",
     "GDP per capita" = "gdppc",
     "Female x Foreign-born (within)" = "female_within:forborn_within",
     "Female x Children (within)" = "female_within:children_within",
@@ -376,10 +404,10 @@ export_summs(
     "ALE x Female x Children x Foreign-language x Foreign-born" = "NFE12_within:female_within:children_within:forlang_within:forborn_within"
   ),
   to.file = "html",
-  file.name = here("Results", "Reg_Table_S2.html")
+  file.name = here("Results", "Table_S3.html")
 )
 
-include_graphics(here("Results", "Reg_Table_S2.html"))
+include_graphics(here("Results", "Table_S3.html"))
 ```
 #### Predictions
 
@@ -568,28 +596,28 @@ df_type61m <- df2r %>%
 
 pred10 <- predict(m4, newdata = df_type10, re.form = NA)
 pred11 <- predict(m4, newdata = df_type11, re.form = NA)
-pred10m <- predict(m4males, newdata = df_type10m, re.form = NA)
-pred11m <- predict(m4males, newdata = df_type11m, re.form = NA)
+pred10m <- predict(m4, newdata = df_type10m, re.form = NA)
+pred11m <- predict(m4, newdata = df_type11m, re.form = NA)
 pred20 <- predict(m4, newdata = df_type20, re.form = NA)
 pred21 <- predict(m4, newdata = df_type21, re.form = NA)
-pred20m <- predict(m4males, newdata = df_type20m, re.form = NA)
-pred21m <- predict(m4males, newdata = df_type21m, re.form = NA)
+pred20m <- predict(m4, newdata = df_type20m, re.form = NA)
+pred21m <- predict(m4, newdata = df_type21m, re.form = NA)
 pred30 <- predict(m4, newdata = df_type30, re.form = NA)
 pred31 <- predict(m4, newdata = df_type31, re.form = NA)
-pred30m <- predict(m4males, newdata = df_type30m, re.form = NA)
-pred31m <- predict(m4males, newdata = df_type31m, re.form = NA)
+pred30m <- predict(m4, newdata = df_type30m, re.form = NA)
+pred31m <- predict(m4, newdata = df_type31m, re.form = NA)
 pred40 <- predict(m4, newdata = df_type40, re.form = NA)
 pred41 <- predict(m4, newdata = df_type41, re.form = NA)
-pred40m <- predict(m4males, newdata = df_type40m, re.form = NA)
-pred41m <- predict(m4males, newdata = df_type41m, re.form = NA)
+pred40m <- predict(m4, newdata = df_type40m, re.form = NA)
+pred41m <- predict(m4, newdata = df_type41m, re.form = NA)
 pred50 <- predict(m4, newdata = df_type50, re.form = NA)
 pred51 <- predict(m4, newdata = df_type51, re.form = NA)
-pred50m <- predict(m4males, newdata = df_type50m, re.form = NA)
-pred51m <- predict(m4males, newdata = df_type51m, re.form = NA)
+pred50m <- predict(m4, newdata = df_type50m, re.form = NA)
+pred51m <- predict(m4, newdata = df_type51m, re.form = NA)
 pred60 <- predict(m4, newdata = df_type60, re.form = NA)
 pred61 <- predict(m4, newdata = df_type61, re.form = NA)
-pred60m <- predict(m4males, newdata = df_type60m, re.form = NA)
-pred61m <- predict(m4males, newdata = df_type61m, re.form = NA)
+pred60m <- predict(m4, newdata = df_type60m, re.form = NA)
+pred61m <- predict(m4, newdata = df_type61m, re.form = NA)
 
 
 # Calculate average marginal effect
@@ -651,12 +679,12 @@ ttest6m <- t.test(pred61m, pred60m, paired = FALSE)
 
 ame_df <- data.frame(
   type = c(
-    "1. Foreign-born mother\nnon-native speaker",
-    "2. Foreign-born no children\nnon-native speaker",
-    "3. Foreign-born mother\nnative speaker",
-    "4. Foreign-born no children\nnative speaker",
-    "5. Native-born mother\nnative speaker",
-    "6. Native-born no children\nnative speaker"
+    "1f. Foreign-born mother\nnon-native speaker",
+    "2f. Foreign-born no children female\nnon-native speaker",
+    "3f. Foreign-born mother\nnative speaker",
+    "4f. Foreign-born no children female\nnative speaker",
+    "5f. Native-born mother\nnative speaker",
+    "6f. Native-born no children female\nnative speaker"
   ),
   AME = c(AME1, AME2, AME3, AME4, AME5, AME6),
   lower = c(ttest1$conf.int[1], ttest2$conf.int[1], ttest3$conf.int[1],
@@ -674,12 +702,12 @@ ame_df <- ame_df %>%
 
 ame_dfm <- data.frame(
   type = c(
-    "1. Foreign-born father\nnon-native speaker",
-    "2. Foreign-born no children\nnon-native speaker",
-    "3. Foreign-born father\nnative speaker",
-    "4. Foreign-born no children\nnative speaker",
-    "5. Native-born father\nnative speaker",
-    "6. Native-born no children\nnative speaker"
+    "1m. Foreign-born father\nnon-native speaker",
+    "2m. Foreign-born no children male\nnon-native speaker",
+    "3m. Foreign-born father\nnative speaker",
+    "4m. Foreign-born no children male\nnative speaker",
+    "5m. Native-born father\nnative speaker",
+    "6m. Native-born no children male\nnative speaker"
   ),
   AME = c(AME1m, AME2m, AME3m, AME4m, AME5m, AME6m),
   lower = c(ttest1m$conf.int[1], ttest2m$conf.int[1], ttest3m$conf.int[1],
@@ -695,11 +723,66 @@ ame_dfm <- ame_dfm %>%
     upper = upper
   )
 
+ame_all <- bind_rows(
+  ame_df  %>% mutate(sex = "f"),
+  ame_dfm %>% mutate(sex = "m")
+)
 
+
+ame_all <- ame_all %>%
+  mutate(type = factor(type, levels = rev(type)))
+
+pal12 <- viridis(n = nlevels(ame_all$type), option = "D", begin = 0.1, end = 0.9)
+
+# extract numeric prefix (1–6) and sex (f/m)
+ame_all <- ame_all %>%
+  mutate(
+    idx = as.integer(substr(type, 1, 1)),
+    sex = ifelse(grepl("^\\dm\\.", type), "m", "f")
+  )
+
+# build desired order: 1f,1m,2f,2m,...
+type_order <- ame_all %>%
+  distinct(type, idx, sex) %>%
+  arrange(idx, sex) %>%          # f comes before m alphabetically
+  pull(type)
+
+# apply order (reverse because coord_flip)
+ame_all$type <- factor(ame_all$type, levels = rev(type_order))
 
 ```
 
 ##### Fig 1f orig CIs
+
+```{r}
+
+
+
+agg_png(here("Results", "Fig1.png"), res = 144, height = 750, width = 750)
+
+ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.55, color = "black") +              # thinner bars
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +                    # 12 viridis colors
+  labs(
+    x = NULL,
+    y = "Average Treatment Effect\nof Participation in ALE",
+    fill = "Type"
+  ) +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y  = element_text(hjust = 1, size = 8),
+    axis.text.x  = element_text(size = 8),
+    axis.title.x = element_text(size = 8),
+    legend.position = "none"
+  )
+
+dev.off()
+
+include_graphics(here("Results", "Fig1.png"))
+```
+
 
 Original CIs
 
