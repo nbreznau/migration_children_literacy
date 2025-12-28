@@ -752,11 +752,9 @@ ame_all$type <- factor(ame_all$type, levels = rev(type_order))
 
 ```
 
-##### Fig 1f orig CIs
+##### Fig 1 orig CIs
 
 ```{r}
-
-
 
 agg_png(here("Results", "Fig1.png"), res = 144, height = 750, width = 750)
 
@@ -784,71 +782,6 @@ include_graphics(here("Results", "Fig1.png"))
 ```
 
 
-Original CIs
-
-```{r}
-
-agg_png(here("Results", "Fig1f.png"), res = 144, height = 600, width = 750)
-
-ggplot(ame_df, aes(x = type, y = AME, fill = type)) +
-  geom_col(width = 0.7, color = "black") +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) +
-  labs(
-    title = NULL,
-    x = NULL,
-    y = "Average Treatment Effect\nof Participation in ALE",
-    fill = "Type"
-  ) +
-  coord_flip() +  
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_text(hjust = 1, size = 8),
-    axis.text.x = element_text(size = 8),
-    axis.title.x = element_text(size = 8),
-    legend.position = "none"
-  )
-
-dev.off()
-
-include_graphics(here("Results", "Fig1f.png"))
-
-
-```
-
-##### Fig 1m orig CIs
-
-Original CIs
-
-```{r}
-
-agg_png(here("Results", "Fig1m.png"), res = 144, height = 600, width = 750)
-
-ggplot(ame_dfm, aes(x = type, y = AME, fill = type)) +
-  geom_col(width = 0.7, color = "black") +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) +
-  labs(
-    title = NULL,
-    x = NULL,
-    y = "Average Treatment Effect\nof Participation in ALE",
-    fill = "Type"
-  ) +
-  coord_flip() +  
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_text(hjust = 1, size = 8),
-    axis.text.x = element_text(size = 8),
-    axis.title.x = element_text(size = 8),
-    legend.position = "none"
-  )
-
-dev.off()
-
-include_graphics(here("Results", "Fig1m.png"))
-
-
-```
 ##### Adjust CIs
 
 The confidence intervals here refer to the entire sample across 26 countries. To make them more realistic to a treatment in one country, we adjust them down to a sample of 5,700 which is the average sample size per country.
@@ -881,111 +814,325 @@ ci4m <- adjust_ci(ttest4m)
 ci5m <- adjust_ci(ttest5m)
 ci6m <- adjust_ci(ttest6m)
 
-# Construct new dataframe for plotting with updated CIs
-ame_df2 <- data.frame(
-  type = c(
-    "1. Foreign-born mother\nnon-native speaker",
-    "2. Foreign-born no children\nnon-native speaker",
-    "3. Foreign-born mother\nnative speaker",
-    "4. Foreign-born no children\nnative speaker",
-    "5. Native-born mother\nnative speaker",
-    "6. Native-born no children\nnative speaker"
-  ),
-  AME = c(-AME1, -AME2, -AME3, -AME4, -AME5, -AME6),  # note the negative flip as before
-  lower = c(ci1[2], ci2[2], ci3[2], ci4[2], ci5[2], ci6[2]),  # upper bound becomes more negative
-  upper = c(ci1[1], ci2[1], ci3[1], ci4[1], ci5[1], ci6[1])   # lower bound becomes more negative
-)
-
-ame_df2m <- data.frame(
-  type = c(
-    "1. Foreign-born mother\nnon-native speaker",
-    "2. Foreign-born no children\nnon-native speaker",
-    "3. Foreign-born mother\nnative speaker",
-    "4. Foreign-born no children\nnative speaker",
-    "5. Native-born mother\nnative speaker",
-    "6. Native-born no children\nnative speaker"
-  ),
-  AME = c(-AME1m, -AME2m, -AME3m, -AME4m, -AME5m, -AME6m),  # note the negative flip as before
-  lower = c(ci1m[2], ci2m[2], ci3m[2], ci4m[2], ci5m[2], ci6m[2]),  # upper bound becomes more negative
-  upper = c(ci1m[1], ci2m[1], ci3m[1], ci4m[1], ci5m[1], ci6m[1])   # lower bound becomes more negative
+# add single country CIs 'sCIs'
+ame_all <- ame_all %>%
+  mutate(upper_sCI = c(ci1[2], ci2[2], ci3[2], ci4[2], ci5[2], ci6[2], ci1m[2], ci2m[2], ci3m[2], ci4m[2], ci5m[2], ci6m[2]),  
+         lower_sCI = c(ci1[1], ci2[1], ci3[1], ci4[1], ci5[1], ci6[1], ci1m[1], ci2m[1], ci3m[1], ci4m[1], ci5m[1], ci6m[1])   
 )
 
 
 ```
 
 
-
-##### Fig 1f new CIs
+##### Fig 1 new CIs
 
 
 ```{r}
 
-agg_png(here("Results", "Fig1fnew.png"), res = 144, height = 600, width = 750)
+agg_png(here("Results", "Fig1_sCI.png"), res = 144, height = 750, width = 750)
 
-ggplot(ame_df2, aes(x = type, y = AME, fill = type)) +
-  geom_col(width = 0.7, color = "black") +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  #annotate("text", y = c(40,40,40,40,40,40), x = c(1,2,3,4,5,6), label = c(round(AME1gap,2),round(AME2gap,2),round(AME3gap,2),round(AME4gap,2),round(AME5gap,2),round(AME6gap,2)), hjust = 1) +
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) +
+ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.55, color = "black") +              # thinner bars
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +                    # 12 viridis colors
   labs(
-    title = NULL,
     x = NULL,
     y = "Average Treatment Effect\nof Participation in ALE",
     fill = "Type"
   ) +
-  ylim(0,35) +
-  coord_flip() +  
+  coord_flip() +
   theme_minimal(base_size = 14) +
   theme(
-    axis.text.y = element_text(hjust = 1, size = 8),
-    axis.text.x = element_text(size = 8),
+    axis.text.y  = element_text(hjust = 1, size = 8),
+    axis.text.x  = element_text(size = 8),
     axis.title.x = element_text(size = 8),
     legend.position = "none"
   )
 
 dev.off()
 
-include_graphics(here("Results", "Fig1fnew.png"))
+include_graphics(here("Results", "Fig1_sCI.png"))
 
 
 ```
 
-##### Fig 1f new CIs
-
-
-```{r}
-
-agg_png(here("Results", "Fig1mnew.png"), res = 144, height = 600, width = 750)
-
-ggplot(ame_df2m, aes(x = type, y = AME, fill = type)) +
-  geom_col(width = 0.7, color = "black") +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  #annotate("text", y = c(40,40,40,40,40,40), x = c(1,2,3,4,5,6), label = c(round(AME1gap,2),round(AME2gap,2),round(AME3gap,2),round(AME4gap,2),round(AME5gap,2),round(AME6gap,2)), hjust = 1) +
-  scale_fill_viridis_d(option = "D", begin = 0.1, end = 0.9) +
-  labs(
-    title = NULL,
-    x = NULL,
-    y = "Average Treatment Effect\nof Participation in ALE",
-    fill = "Type"
-  ) +
-  ylim(0,35) +
-  coord_flip() +  
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_text(hjust = 1, size = 8),
-    axis.text.x = element_text(size = 8),
-    axis.title.x = element_text(size = 8),
-    legend.position = "none"
-  )
-
-dev.off()
-
-include_graphics(here("Results", "Fig1mnew.png"))
-
-
-```
 
 ### Population Predictions
+
+#### ChatGPT.1
+
+https://chatgpt.com/g/g-p-68f73eb2f04c8191b8d01fb61cc071ee-intersectionality-and-ale/c/69512571-95c0-8321-9143-701a95c3beba
+
+```{r}
+
+vars_raw    <- c("female", "FORBORN", "FORLANG", "children")
+vars_within <- c("female_within", "forborn_within", "forlang_within", "children_within")
+vars_between <- c("female_between", "forborn_between", "forlang_between", "children_between")
+
+# Map raw -> within/between names used in your df2
+map_within <- c(female="female_within", FORBORN="forborn_within", FORLANG="forlang_within", children="children_within")
+map_between <- c(female="female_between", FORBORN="forborn_between", FORLANG="forlang_between", children="children_between")
+
+# 1) Build counterfactual newdata for predict(m4) consistent with within/between coding
+make_newdata_for_m4 <- function(df_base, spec, nfe_value) {
+  stopifnot(all(names(spec) %in% vars_raw))
+  nd <- df_base
+
+  # Set NFE12 within directly to 0/1 *as you did* (but note: it is "within", so this is a strong intervention).
+  # If you want "raw NFE12=0/1 then convert to within", you need NFE12_between (not in your df2r snippet).
+  nd$NFE12_within <- nfe_value - nd$NFE12_between
+
+  # For each targeting var: if spec is 0/1, set within = target - between; else leave as observed (population mix).
+  for (v in vars_raw) {
+    target <- spec[[v]]
+    if (!is.na(target)) {
+      w <- map_within[[v]]
+      b <- map_between[[v]]
+      nd[[w]] <- target - nd[[b]]
+    }
+  }
+
+  nd
+}
+
+# 2) Compute AME for a spec: E[pred(NFE=1) - pred(NFE=0)] (weighted)
+calc_ame_spec <- function(model_m4, df_base, spec, weight_var="aweight") {
+  nd0 <- make_newdata_for_m4(df_base, spec, nfe_value = 0)
+  nd1 <- make_newdata_for_m4(df_base, spec, nfe_value = 1)
+
+  p0 <- predict(model_m4, newdata = nd0, re.form = NA)
+  p1 <- predict(model_m4, newdata = nd1, re.form = NA)
+
+  d  <- p1 - p0  # gain from ALE
+
+  w <- df_base[[weight_var]]
+  ok <- is.finite(d) & is.finite(w) & !is.na(w) & w > 0
+  d <- d[ok]; w <- w[ok]
+
+  ame <- weighted.mean(d, w)
+
+  # Simple weighted SE (design-based would be better; this is a pragmatic approximation)
+  se  <- sqrt( sum(w^2 * (d - ame)^2) / (sum(w)^2) )
+  ci  <- ame + c(-1, 1) * 1.96 * se
+
+  list(AME = ame, SE = se, lower = ci[1], upper = ci[2])
+}
+
+# 3) Identify who is "in the targeted group" given a spec (raw vars; NA means ignore)
+in_group <- function(df, spec) {
+  idx <- rep(TRUE, nrow(df))
+  for (v in vars_raw) {
+    target <- spec[[v]]
+    if (!is.na(target)) idx <- idx & (df[[v]] == target)
+  }
+  idx
+}
+
+# 4) Population gain per country from targeting spec:
+#    Boost skill_reading by AME for those in group AND NFE12==0, then take weighted mean difference.
+calc_country_gains <- function(df2_full, spec, AME, weight_var="aweight") {
+  df <- df2_full
+
+  g  <- in_group(df, spec)
+  treatable <- g & df$NFE12 == 0 & !is.na(df$skill_reading)
+
+  df <- df %>%
+    mutate(
+      skill_boost = ifelse(treatable, skill_reading + AME, skill_reading),
+      g_total     = ifelse(g, 1, 0),
+      g_noale     = ifelse(g & NFE12 == 0, 1, 0)
+    )
+
+  out <- df %>%
+    filter(!is.na(iso3c)) %>%
+    group_by(iso3c) %>%
+    summarise(
+      skill_base  = weighted.mean(skill_reading, .data[[weight_var]], na.rm = TRUE),
+      skill_gain  = weighted.mean(skill_boost,   .data[[weight_var]], na.rm = TRUE) - skill_base,
+      pct_group   = weighted.mean(g_total, .data[[weight_var]], na.rm = TRUE),
+      pct_group_noale = weighted.mean(g_noale, .data[[weight_var]], na.rm = TRUE),
+      pop18to65 = sum(SPFWT0, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  out
+}
+
+```
+#### ChatGPT.2
+
+```{r}
+
+
+make_all_specs <- function(vars = vars_raw) {
+  # all subsets except empty
+  subsets <- unlist(lapply(1:length(vars), function(k) combn(vars, k, simplify = FALSE)), recursive = FALSE)
+
+  specs <- map_dfr(subsets, function(active) {
+    grid <- expand.grid(rep(list(c(0,1)), length(active)))
+    colnames(grid) <- active
+    # inactive vars are NA ("all")
+    for (v in setdiff(vars, active)) grid[[v]] <- NA_integer_
+    grid %>% select(all_of(vars))
+  })
+
+  specs %>%
+    mutate(
+      spec_id = row_number(),
+      spec_label = pmap_chr(across(all_of(vars)), function(female, FORBORN, FORLANG, children) {
+        lab1 <- if (is.na(female))   "female=all"   else paste0("female=", female)
+        lab2 <- if (is.na(FORBORN))  "FORBORN=all"  else paste0("FORBORN=", FORBORN)
+        lab3 <- if (is.na(FORLANG))  "FORLANG=all"  else paste0("FORLANG=", FORLANG)
+        lab4 <- if (is.na(children)) "children=all" else paste0("children=", children)
+        paste(lab1, lab2, lab3, lab4, sep="; ")
+      })
+    )
+}
+
+specs_all <- make_all_specs()
+nrow(specs_all)  # 80
+```
+
+#### ChatGPT.3
+
+```{r}
+# df2r is your prediction base; keep your existing filter
+df2r <- subset(df2, !is.na(female) & !is.na(NFE12) & !is.na(children_within) &
+                 !is.na(forborn_within) & !is.na(forlang_within) &
+                 !is.na(ed3) & !is.na(gdppc) & !is.na(skill_reading))
+
+ame_specs <- specs_all %>%
+  mutate(res = pmap(select(., all_of(vars_raw)), \(female, FORBORN, FORLANG, children) {
+    spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
+    calc_ame_spec(m4, df2r, spec, weight_var="aweight")
+  })) %>%
+  mutate(
+    AME   = map_dbl(res, "AME"),
+    SE    = map_dbl(res, "SE"),
+    lower = map_dbl(res, "lower"),
+    upper = map_dbl(res, "upper")
+  ) %>%
+  select(-res)
+
+# Example: pick the 12 "fully specified" (no NA) if you want the old Fig1 family:
+ame_12 <- ame_specs %>%
+  filter(if_all(all_of(vars_raw), ~ !is.na(.))) %>%
+  mutate(type = spec_label)
+
+# scale SE by sqrt(N_old / N_new); your old N_old was the pooled micro N, but you were using 5700.
+# Here: just define a target N and a reference N. Pragmatic: use df2r n as reference.
+adjust_se_to_n <- function(se, n_ref, n_new) se * sqrt(n_ref / n_new)
+
+n_ref <- nrow(df2r)
+n_new <- 5700
+
+ame_12 <- ame_12 %>%
+  mutate(
+    SE_sCI = adjust_se_to_n(SE, n_ref, n_new),
+    lower_sCI = AME - 1.96 * SE_sCI,
+    upper_sCI = AME + 1.96 * SE_sCI
+  )
+
+```
+
+#### ChatGPT.4
+
+```{r}
+
+# Example default you described:
+# X group: foreign-born, female=0 (male), FORLANG=all, children=all
+spec_X <- list(female=0, FORBORN=1, FORLANG=NA, children=NA)
+
+# Y group: foreign-born, female=1 (female), FORLANG=all, children=all
+spec_Y <- list(female=1, FORBORN=1, FORLANG=NA, children=NA)
+
+ameX <- calc_ame_spec(m4, df2r, spec_X, weight_var="aweight")$AME
+ameY <- calc_ame_spec(m4, df2r, spec_Y, weight_var="aweight")$AME
+
+gainX <- calc_country_gains(df2, spec_X, AME=ameX, weight_var="aweight") %>%
+  rename(skill_gain_X = skill_gain, pct_group_X = pct_group, pct_group_noale_X = pct_group_noale)
+
+gainY <- calc_country_gains(df2, spec_Y, AME=ameY, weight_var="aweight") %>%
+  rename(skill_gain_Y = skill_gain, pct_group_Y = pct_group, pct_group_noale_Y = pct_group_noale)
+
+final_df_xy <- gainX %>%
+  left_join(gainY, by="iso3c", suffix=c("_X","_Y"))
+
+
+```
+
+
+#### ChatGPT.5
+
+```{r}
+library(ggrepel)
+library(scales)
+
+ggplot(final_df_xy, aes(
+  x = skill_gain_X,
+  y = skill_gain_Y,
+  label = iso3c,
+  size = pct_group_X
+)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "grey40") +
+  geom_point(aes(color = pct_group_noale_Y), alpha = 0.9) +
+  geom_text_repel(size = 3, max.overlaps = Inf) +
+  scale_size_continuous(
+    range = c(1, 6),
+    name = "% X group\nof pop",
+    labels = percent_format(accuracy = 1)
+  ) +
+  scale_color_gradient(
+    name = "% Y group\nno ALE",
+    low = "lightblue", high = "darkblue",
+    labels = percent_format(accuracy = 1)
+  ) +
+  labs(
+    title = "Simulated National Literacy Gains from Targeted ALE",
+    subtitle = "Country mean gain if all non-participants in the targeted group received the AME",
+    x = "Gain from X targeting",
+    y = "Gain from Y targeting"
+  ) +
+  theme_classic()
+
+```
+
+#### Save Objects for Shiny
+
+```{r}
+saveRDS(df2,  here("Shiny", "shiny_df2.rds"))
+saveRDS(df2r, here("Shiny", "shiny_df2r.rds"))
+
+# Save model
+saveRDS(m4,   here("Shiny", "shiny_m4.rds"))
+
+# Save helper functions + mappings in one object
+shiny_helpers <- list(
+  vars_raw     = vars_raw,
+  map_within   = map_within,
+  map_between  = map_between,
+  make_newdata_for_m4 = make_newdata_for_m4,
+  in_group     = in_group,
+  calc_ame_spec = calc_ame_spec,
+  calc_country_gains = calc_country_gains
+)
+
+saveRDS(shiny_helpers, here("Shiny", "shiny_helpers.rds"))
+```
+
+
+
+
+
+
+
+
+
+
+
+#### Old
+
+
 
 Here we calculate how much skills would improve if every non-participant in ALE got a skill boost equal to the average in group 1 v. group 6. 
 
@@ -1103,7 +1250,7 @@ scale_size_continuous(
   labels = scales::percent_format(accuracy = 1)
 ) +
   labs(
-    title = "Simulated National Literacy Gains from Targeted ALE",
+    title = "Simulated National Literacy Gains from Targeted ALE Females",
     subtitle = "Boost in average female literacy if all non-participants in each group joined ALE",
     x = "Overall gain to average literacy if all type 1 without ALE\nwere given an ALE treatment effect",
     y = "Overall gain to average literacy if all type 6 without ALE\nwere given an ALE treatment effect"
@@ -1151,7 +1298,7 @@ scale_size_continuous(
   labels = scales::percent_format(accuracy = 1)
 ) +
   labs(
-    title = "Simulated National Literacy Gains from Targeted ALE",
+    title = "Simulated National Literacy Gains from Targeted ALE Males",
     subtitle = "Boost in average male literacy if all non-participants in each group joined ALE",
     x = "Overall gain to average literacy if all type 1 without ALE\nwere given an ALE treatment effect",
     y = "Overall gain to average literacy if all type 6 without ALE\nwere given an ALE treatment effect"
