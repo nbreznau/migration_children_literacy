@@ -1,0 +1,10 @@
+name: ale_intervention
+title:
+username: nate-breznau
+account: nate-breznau
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16371612
+bundleId: 11399655
+url: https://nate-breznau.shinyapps.io/ale_intervention/
+version: 1

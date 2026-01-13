@@ -167,12 +167,17 @@ include_graphics(here("Results", "Fig1A.png"))
 
 UN. 2024. “Total Number of Emigrants: People That Were Born in a Country and Now Live in Another Country” [CSV]. Our World In Data: United Nations Department of Economic and Social Affairs. https://ourworldindata.org/migration.
 
-File downloaded
+UN. 2024. "Share of The Population That Were Born in Another Country" [CSV]. Our World In Data: United Nations Department of Economic and Social Affairs. https://ourworldindata.org/grapher/migrant-stock-share
+
+Files downloaded 2025/12/05
 
 
 ```{r}
 
 df_un_mig <- read_csv(here("Data", "total-number-of-emigrants.filtered", "total-number-of-emigrants.csv"))
+
+df_un_fb <- read_csv(here("Data", "migrant-stock-share.filtered", "migrant-stock-share.csv")) %>%
+  subset(Year == 2024)
 
 continents <- c("Africa","Asia","Europe","North America","Oceania","South America")
 
@@ -209,9 +214,20 @@ df_2A <- df_emig_out %>%
   left_join(df_pop_2024, by = "Entity")
 
 df_2A <- df_2A %>%
-  mutate(pct_fb_stock_2024 = round(100*(emigrants_2024/population_2024),1))
+  mutate(pct_emig_2024 = round(100*(emigrants_2024/population_2024),1))
 
-rm(df_un_mig, df_emig_out, df_pop_2024)
+df_2A <- df_2A %>%
+  mutate(pct_fb_2024 = case_when(Entity == "Africa" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Africa"],
+                                 Entity == "Asia" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Asia"],
+                                 Entity == "Europe" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Western Europe (UN)"],
+                                 Entity == "North America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "North America"],
+                                 Entity == "Oceania" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Oceania"],
+                                 Entity == "South America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "South America"],
+                                 Entity == "World" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "World"]),
+         pct_fb_2024 = round(pct_fb_2024, 1)
+  )
+
+rm(df_un_mig, df_emig_out, df_pop_2024, df_un_fb)
 
 write.csv(df_2A, here("Results", "TS2.csv"), row.names = FALSE)
 

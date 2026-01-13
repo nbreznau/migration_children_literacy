@@ -856,6 +856,35 @@ include_graphics(here("Results", "Fig1_sCI.png"))
 
 ```
 
+##### Fig 1 Slide Version
+
+```{r}
+
+agg_png(here("Results", "Fig1_keio.png"), res = 144, height = 1000, width = 550)
+
+ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.55, color = "black") +              # thinner bars
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +                    # 12 viridis colors
+  labs(
+    x = NULL,
+    y = "Average Treatment Effect\nof Participation in ALE",
+    fill = "Type"
+  ) +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y  = element_text(hjust = 1, size = 8),
+    axis.text.x  = element_text(size = 8),
+    axis.title.x = element_text(size = 8),
+    legend.position = "none"
+  )
+
+dev.off()
+
+include_graphics(here("Results", "Fig1_keio.png"))
+
+```
 
 ### Population Predictions
 
@@ -878,8 +907,8 @@ make_newdata_for_m4 <- function(df_base, spec, nfe_value) {
   stopifnot(all(names(spec) %in% vars_raw))
   nd <- df_base
 
-  # Set NFE12 within directly to 0/1 *as you did* (but note: it is "within", so this is a strong intervention).
-  # If you want "raw NFE12=0/1 then convert to within", you need NFE12_between (not in your df2r snippet).
+  # Set NFE12 within directly to 0/1  (this is "within", so this is a strong intervention).
+
   nd$NFE12_within <- nfe_value - nd$NFE12_between
 
   # For each targeting var: if spec is 0/1, set within = target - between; else leave as observed (population mix).
@@ -1059,6 +1088,7 @@ final_df_xy <- gainX %>%
   left_join(gainY, by="iso3c", suffix=c("_X","_Y"))
 
 
+
 ```
 
 
@@ -1121,6 +1151,53 @@ saveRDS(shiny_helpers, here("Shiny", "shiny_helpers.rds"))
 ```
 
 
+##### Alternative precompute  
+
+The RAM needed to run predict every time is too large for shinyapps.io, this precomputes everything
+
+```{r}
+
+vars_raw <- c("female","FORBORN","FORLANG","children")
+
+spec_grid <- expand.grid(
+  female   = c(NA, 0L, 1L),
+  FORBORN  = c(NA, 0L, 1L),
+  FORLANG  = c(NA, 0L, 1L),
+  children = c(NA, 0L, 1L)
+)
+
+spec_to_id <- function(row) {
+  paste0(
+    "f=", ifelse(is.na(row$female), "all", row$female), ";",
+    "b=", ifelse(is.na(row$FORBORN), "all", row$FORBORN), ";",
+    "l=", ifelse(is.na(row$FORLANG), "all", row$FORLANG), ";",
+    "c=", ifelse(is.na(row$children), "all", row$children)
+  )
+}
+
+spec_grid$spec_id <- apply(spec_grid, 1, function(x) spec_to_id(as.list(x)))
+
+library(purrr)
+
+precomp <- purrr::pmap_dfr(spec_grid, function(female, FORBORN, FORLANG, children, spec_id) {
+  spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
+
+  ame <- calc_ame_spec(m4, df2r, spec, weight_var="aweight")
+  cg  <- calc_country_gains(df2, spec, AME=ame$AME, weight_var="aweight")
+
+  cg$spec_id <- spec_id
+  cg$AME     <- ame$AME
+  cg$SE      <- ame$SE
+  cg$lower   <- ame$lower
+  cg$upper   <- ame$upper
+  cg
+})
+
+saveRDS(precomp, here("Shiny", "precomp_spec_country.rds"))
+saveRDS(spec_grid, here("Shiny", "precomp_spec_grid.rds"))
+
+
+```
 
 
 
