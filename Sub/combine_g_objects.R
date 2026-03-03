@@ -1,3 +1,8 @@
+# combine_g_objects.R
+library(dplyr)
+library(purrr)
+library(tibble)
+
 # labels in order g1 ... g31
 group_labels <- c(
   "ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb",
@@ -9,13 +14,15 @@ group_labels <- c(
   "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild"
 )
 
-groups <- paste0("g", seq_along(group_labels))     # "g1" ... "g31"
-cycles <- c("df1", "df2")                           # cycle 1 and 2
+groups <- paste0("g", seq_along(group_labels))   # "g1" ... "g31"
+cycles <- c("df1", "df2")                        # cycle 1 and 2
 
-# helper to fetch mean/se for a group-cycle pair, safely
-fetch_stats <- function(g, cyc) {
-  mean_name <- paste0(g, "_mean_lit_", cyc)
-  se_name   <- paste0(g, "_se_lit_",   cyc)
+# --- generic fetcher for domain = "lit" or "num" ---
+fetch_stats_domain <- function(g, cyc, domain = c("lit", "num")) {
+  domain <- match.arg(domain)
+  
+  mean_name <- paste0(g, "_mean_", domain, "_", cyc)
+  se_name   <- paste0(g, "_se_",   domain, "_", cyc)
   
   mean_val <- get0(mean_name, ifnotfound = NA_real_)
   se_val   <- get0(se_name,   ifnotfound = NA_real_)
@@ -28,21 +35,22 @@ fetch_stats <- function(g, cyc) {
   )
 }
 
-# build the long table
-df_lit <- map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats(g, cyc))) |>
-  mutate(
-    # attach pretty label in same order as groups
-    group_label = group_labels[as.integer(sub("^g", "", group))],
-    # round as requested
-    mean = round(mean, 1),
-    se   = round(se, 2)
-  ) |>
-  # optional: order factors nicely
-  mutate(
-    group = factor(group, levels = groups),
-    cycle = factor(cycle, levels = c("df1", "df2"),
-                   labels = c("Cycle 1 (2012)", "Cycle 2 (2022)"))
-  )
+build_df_domain <- function(domain = c("lit", "num"),
+                            cycle_labels = c("Cycle 1 (2012)", "Cycle 2 (2022)")) {
+  domain <- match.arg(domain)
+  
+  map_dfr(groups, \(g) map_dfr(cycles, \(cyc) fetch_stats_domain(g, cyc, domain))) |>
+    mutate(
+      group_label = group_labels[as.integer(sub("^g", "", group))],
+      mean = round(mean, 1),
+      se   = round(se, 2),
+      group = factor(group, levels = groups),
+      cycle = factor(cycle,
+                     levels = c("df1", "df2"),
+                     labels = cycle_labels)
+    )
+}
 
-# peek
-df_lit
+# ---- outputs (match old df_lit exactly; plus df_num) ----
+df_lit <- build_df_domain("lit")
+df_num <- build_df_domain("num")

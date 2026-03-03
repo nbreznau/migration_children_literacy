@@ -495,11 +495,13 @@ source(here("Sub", "combine_g_objects_pct.R"))
 
 
 # remove raw objects
-rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
-rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_diff$"))
+rm(list = ls(pattern = "^g[0-9]+_(pct)_lit01_df[12]$"))  # pct is literacy-only so far (num can be calculated the same way)
 
 # give unique naming
 df_lit_all <- df_lit
+df_num_all <- df_num
 df_pct_level_1_or_less_all <- df_pct_level_1_or_less
 
 ```
@@ -558,28 +560,30 @@ df_pct_level_1_or_less_eur <- df_pct_level_1_or_less
 
 #### Germany only
 
-This is out of curiosity 
+This is for a blog post predecessor to the study in the GrundbildungsPFADE project out of curiosity 
 
 ```{r}
-
+group_vars = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
+               
 calc_groups_pv(
     df1_rep = df1_rep_de, 
     df2_rep = df2_rep_de,
     pvlit   = pvlit,
-    pvnum   = NA,
-    group_vars   = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
-  )
+    pvnum   = pvnum,
+    group_vars = group_vars)
 
 source(here("Sub", "combine_g_objects.R"))
 source(here("Sub", "combine_g_objects_pct.R"))
 
-rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_diff$"))
 rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
 
 df_lit_de <- df_lit
+df_num_de <- df_num
 df_pct_level_1_or_less_de <- df_pct_level_1_or_less
 
-rm(df_lit, df_pct_level_1_or_less)
+rm(df_lit, df_num, df_pct_level_1_or_less)
 ```
 
 ### Plot
@@ -608,6 +612,11 @@ df_a2_eur <- df_lit_eur %>%
 
 # DE
 df_a2_de <- df_lit_de %>%
+  filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
+  select(group_label, mean) %>%
+  drop_na(mean)
+
+df_a2num_de <- df_num_de %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
   select(group_label, mean) %>%
   drop_na(mean)
@@ -643,6 +652,12 @@ df_a2_eur <- df_a2_eur %>%
   )
 
 df_a2_de <- df_a2_de %>%
+  mutate(
+    depth = vapply(group_label, depth_of, integer(1)),
+    parent = vapply(group_label, parent_of, character(1))
+  )
+
+df_a2num_de <- df_a2num_de %>%
   mutate(
     depth = vapply(group_label, depth_of, integer(1)),
     parent = vapply(group_label, parent_of, character(1))
@@ -698,8 +713,12 @@ df_a2_eur <- df_a2_eur %>%
 df_a2_de <- df_a2_de %>%
   mutate(plot_label = plot_label_map[group_label])
 
+df_a2num_de <- df_a2num_de %>%
+  mutate(plot_label = plot_label_map[group_label])
+
 # organize data for plotting
 labels <- df_a2$group_label
+
 children_map <- df_a2 %>%
   select(group_label, parent) %>%
   filter(!is.na(parent), parent %in% labels) %>%
@@ -732,6 +751,14 @@ children_map_de <- df_a2_de %>%
   summarise(children = list(group_label), .groups = "drop") %>%
   deframe()
 
+children_map_de_num <- df_a2num_de %>%
+  select(group_label, parent) %>%
+  filter(!is.na(parent), parent %in% labels) %>%
+  arrange(parent, group_label) %>%
+  group_by(parent) %>%
+  summarise(children = list(group_label), .groups = "drop") %>%
+  deframe()
+
 # Ensure every label is a key (even if it has no children)
 for (lab in labels) if (is.null(children_map[[lab]])) children_map[[lab]] <- character(0)
 
@@ -741,10 +768,13 @@ for (lab in labels) if (is.null(children_map_eur[[lab]])) children_map_eur[[lab]
 
 for (lab in labels) if (is.null(children_map_de[[lab]])) children_map_de[[lab]] <- character(0)
 
+for (lab in labels) if (is.null(children_map_de_num[[lab]])) children_map_de_num[[lab]] <- character(0)
+
 max_depth <- max(df_a2$depth, na.rm = TRUE)
 max_depth_rich <- max(df_a2_rich$depth, na.rm = TRUE)
 max_depth_eur <- max(df_a2_eur$depth, na.rm = TRUE)
 max_depth_de <- max(df_a2_de$depth, na.rm = TRUE)
+max_depth_de_num <- max(df_a2num_de$depth, na.rm = TRUE)
 
 # Assign x recursively 
 x_pos <- setNames(rep(NA_real_, length(labels)), labels)
@@ -805,6 +835,18 @@ assign_positions_de <- function(node, depth, x) {
   }
 }
 
+assign_positions_de_num <- function(node, depth, x) {
+  x_pos[[node]] <<- x
+  ch <- children_map_de_num[[node]]                 
+  if (length(ch) == 2) {
+    offset <- 2^(max_depth_de_num - depth - 1)      
+    assign_positions_de_num(ch[1], depth + 1, x - offset)
+    assign_positions_de_num(ch[2], depth + 1, x + offset)
+  } else if (length(ch) == 1) {
+    assign_positions_de_num(ch[1], depth + 1, x)
+  }
+}
+
 root <- if ("ALL" %in% labels) "ALL" else df_a2 %>% arrange(depth) %>% slice(1) %>% pull(group_label)
 assign_positions(root, 0L, 0)
 
@@ -816,6 +858,9 @@ assign_positions_eur(root_eur, 0L, 0)
 
 root_de <- if ("ALL" %in% labels) "ALL" else df_a2_de %>% arrange(depth) %>% slice(1) %>% pull(group_label)
 assign_positions_de(root_de, 0L, 0)
+
+root_de_num <- if ("ALL" %in% labels) "ALL" else df_a2num_de %>% arrange(depth) %>% slice(1) %>% pull(group_label)
+assign_positions_de_num(root_de_num, 0L, 0)
 
 # Top is y=0, then working down (by going up in count)
 df_a2 <- df_a2 %>%
@@ -837,6 +882,12 @@ df_a2_eur <- df_a2_eur %>%
   )
 
 df_a2_de <- df_a2_de %>%
+  mutate(
+    x = unname(x_pos[group_label]),
+    y = depth
+  )
+
+df_a2num_de <- df_a2num_de %>%
   mutate(
     x = unname(x_pos[group_label]),
     y = depth
@@ -869,6 +920,13 @@ edges_de <- df_a2_de %>%
   #mutate(y = y + 1) %>%
   select(child = group_label, xend = x, yend = y, parent) %>%
   left_join(df_a2_de %>% select(parent = group_label, x, y),
+            by = "parent", relationship = "many-to-one") %>%
+  filter(!is.na(parent))
+
+edges_de_num <- df_a2num_de %>%
+  #mutate(y = y + 1) %>%
+  select(child = group_label, xend = x, yend = y, parent) %>%
+  left_join(df_a2num_de %>% select(parent = group_label, x, y),
             by = "parent", relationship = "many-to-one") %>%
   filter(!is.na(parent))
 
@@ -1037,6 +1095,9 @@ include_graphics(here("Results", "Fig2A_C.png"))
 ```
 
 #### DE ONLY
+
+##### Lit English Labels
+
 ```{r}
 
 agg_png(here("Results", "Fig2A_D.png"), res = 576, width = 3200, height = 2250)
@@ -1089,6 +1150,133 @@ include_graphics(here("Results", "Fig2A_D.png"))
 
 ```
 
+##### Lit DE Labels
+
+```{r}
+
+agg_png(here("Results", "Fig2A_D_Deutsch.png"), res = 576, width = 3200, height = 2250)
+
+df_a2_de_X <- df_a2_de %>%
+  mutate(plot_label = case_match(plot_label,
+                                 "Male" ~ "Männer",
+                                 "Female" ~ "Frauen",
+                                 "Native-born" ~ "DE geboren",
+                                 "Foreign-born" ~ "Ausl. geboren",
+                                 "Native" ~ "Erstsprache",
+                                 "Non-native" ~ "nicht Erstsprache",
+                                 "Parent" ~ "Mit",
+                                 "Childless" ~ "Ohne")
+  )
+
+pdex <- ggplot(df_a2_de_X, aes(x = x, y = y, color = mean)) +
+  geom_segment(
+    data = edges_de,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    color = "grey75",
+    linetype = "dotted"
+  ) +
+  geom_point(size = 5) +
+  geom_text(
+    aes(label = round(mean, 0)), 
+    vjust = -2.2, 
+    size = 2.2, 
+    color = "black"
+    ) +
+  geom_text(
+    aes(label = plot_label),
+    vjust = 3,
+    size = 1.7,
+    color = "black"
+    ) +
+  scale_color_viridis_c(name = "Literalität") +
+  scale_y_reverse(
+    breaks = 0:4,
+    labels = c("Gesamt", "Geschlecht", "Migration", "Deutsch", "Elternschaft"),
+    limits = c(4.1,-0.1)
+    ) +
+  labs(
+    x = NULL, y = "Gruppen",
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+pdex
+
+dev.off()
+
+include_graphics(here("Results", "Fig2A_D_Deutsch.png"))
+
+```
+
+##### Num DE Labels
+
+```{r}
+
+agg_png(here("Results", "Fig2A_D_Num_Deutsch.png"), res = 576, width = 3200, height = 2250)
+
+df_a2num_de_X <- df_a2num_de %>%
+  mutate(plot_label = case_match(plot_label,
+                                 "Male" ~ "Männer",
+                                 "Female" ~ "Frauen",
+                                 "Native-born" ~ "DE geboren",
+                                 "Foreign-born" ~ "Ausl. geboren",
+                                 "Native" ~ "Erstsprache",
+                                 "Non-native" ~ "nicht Erstsprache",
+                                 "Parent" ~ "Mit",
+                                 "Childless" ~ "Ohne")
+  )
+
+pdex <- ggplot(df_a2num_de_X, aes(x = x, y = y, color = mean)) +
+  geom_segment(
+    data = edges_de,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    color = "grey75",
+    linetype = "dotted"
+  ) +
+  geom_point(size = 5) +
+  geom_text(
+    aes(label = round(mean, 0)), 
+    vjust = -2.2, 
+    size = 2.2, 
+    color = "black"
+    ) +
+  geom_text(
+    aes(label = plot_label),
+    vjust = 3,
+    size = 1.7,
+    color = "black"
+    ) +
+  scale_color_viridis_c(name = "Numeralität") +
+  scale_y_reverse(
+    breaks = 0:4,
+    labels = c("Gesamt", "Geschlecht", "Migration", "Deutsch", "Elternschaft"),
+    limits = c(4.1,-0.1)
+    ) +
+  labs(
+    x = NULL, y = "Gruppen",
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+pdex
+
+dev.off()
+
+include_graphics(here("Results", "Fig2A_D_Num_Deutsch.png"))
+
+```
 ## Citations
 
 ```{r}
