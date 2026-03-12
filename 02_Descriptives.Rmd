@@ -237,12 +237,14 @@ rm(df_2A)
 
 ## Table S1. Descriptives
 
-### Women
+Drop cases of those still in formal education. Add footnote to table that `r sum(df2$ed_currently == 1, na.rm = T)`.
+
+### All
 
 ```{r}
 
-table_1 <- df2 %>%
-  subset(female == 1) %>%
+table_1_all <- df2 %>%
+  subset(ed_currently != 1) %>%
     mutate(
     ed_primary   = ifelse(ed3 == 1, 1, 0),
     ed_secondary = ifelse(ed3 == 2, 1, 0),
@@ -251,7 +253,86 @@ table_1 <- df2 %>%
                         .default = NA)
     ) %>%
   select(-ed3) %>%
-  select(iso3c, skill_reading, NFE12, FORBORN, children, FORLANG, ed_primary, ed_secondary, ed_tertiary, ed_currently, missing, aweight)
+  select(iso3c, skill_reading, NFE12, female, FORBORN, children, FORLANG, ed_primary, ed_secondary, ed_tertiary, missing, aweight)
+
+  
+# drop countries that do not have all variables
+valid_countries <- table_1_all %>%
+  group_by(iso3c) %>%
+  summarise(across(everything(), ~ sum(!is.na(.)))) %>%
+  filter(across(-iso3c, ~ . > 0)) %>%
+  pull(iso3c)
+
+table_1_all <- table_1_all %>%
+  filter(iso3c %in% valid_countries)
+
+table_1outa <- table_1_all %>%
+  select(-iso3c) %>%
+  summarise(across(
+    everything(),
+    list(
+      mean  = ~ mean(., na.rm = TRUE),
+      wmean = ~ weighted.mean(., aweight, na.rm = TRUE),
+      sd    = ~ sd(., na.rm = TRUE),
+      min   = ~ min(., na.rm = TRUE),
+      max   = ~ max(., na.rm = TRUE),
+      n     = ~ sum(!is.na(.))
+    ),
+    .names = "{.col}__{.fn}"
+  )) %>%
+  pivot_longer(
+    everything(),
+    names_to = c("variable", ".value"),
+    names_sep = "__"
+  ) %>%
+  mutate(variable = case_when(
+    variable == "skill_reading"   ~ "Literacy Skills",
+    variable == "NFE12"           ~ "ALE Participation",
+    variable == "FORBORN"         ~ "Foreign-Born",
+    variable == "children"        ~ "Has Children",
+    variable == "FORLANG"         ~ "Non-Native Speaker",
+    variable == "ed_primary"      ~ "Primary Education",
+    variable == "ed_secondary"    ~ "Secondary Education",
+    variable == "ed_tertiary"     ~ "Tertiary Education",
+    variable == "missing"         ~ "Listwise Missing Cases",
+    TRUE ~ variable
+  ))
+
+# Save as HTML
+table_1outa %>%
+  select(variable, mean, wmean, sd, min, max, n) %>%
+  kable("html", digits = 2, caption = "Descriptive Statistics with Weighted Means") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover")) %>%
+  save_kable(here("Results", "table_S1.html"))
+
+
+table_1outa  %>% kable("html", digits = 2, caption = "Descriptive Statistics") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+write.csv(
+  table_1outa,
+  file = here("Results", "TS1.csv"),
+  row.names = FALSE
+)
+
+
+```
+
+### Women
+
+```{r}
+
+table_1 <- df2 %>%
+  subset(female == 1 & !is.na(female) & ed_currently != 1) %>%
+    mutate(
+    ed_primary   = ifelse(ed3 == 1, 1, 0),
+    ed_secondary = ifelse(ed3 == 2, 1, 0),
+    ed_tertiary  = ifelse(ed3 == 3, 1, 0),
+    missing = case_when(is.na(skill_reading) | is.na(NFE12) | is.na(FORBORN) | is.na(children) | is.na(FORLANG) | is.na(ed3) | is.na(ed_currently) ~ 1,
+                        .default = NA)
+    ) %>%
+  select(-ed3) %>%
+  select(iso3c, skill_reading, NFE12, FORBORN, children, FORLANG, ed_primary, ed_secondary, ed_tertiary, missing, aweight)
 
   
 # drop countries that do not have all variables
@@ -289,7 +370,6 @@ table_1out <- table_1 %>%
     variable == "FORBORN"         ~ "Foreign-Born",
     variable == "children"        ~ "Has Children",
     variable == "FORLANG"         ~ "Non-Native Speaker",
-    variable == "ed_currently"    ~ "Currently in Education",
     variable == "ed_primary"      ~ "Primary Education",
     variable == "ed_secondary"    ~ "Secondary Education",
     variable == "ed_tertiary"     ~ "Tertiary Education",
@@ -322,7 +402,7 @@ write.csv(
 ```{r}
 
 table_1a <- df2 %>%
-  subset(female == 0) %>%
+  subset(female == 0 & !is.na(female) & ed_currently != 1) %>%
     mutate(
     ed_primary   = ifelse(ed3 == 1, 1, 0),
     ed_secondary = ifelse(ed3 == 2, 1, 0),
@@ -331,7 +411,7 @@ table_1a <- df2 %>%
                         .default = NA)
     ) %>%
   select(-ed3) %>%
-  select(iso3c, skill_reading, NFE12, FORBORN, children, FORLANG, ed_primary, ed_secondary, ed_tertiary, ed_currently, missing, aweight)
+  select(iso3c, skill_reading, NFE12, FORBORN, children, FORLANG, ed_primary, ed_secondary, ed_tertiary, missing, aweight)
 
   
 # drop countries that do not have all variables
@@ -369,7 +449,6 @@ table_1outa <- table_1a %>%
     variable == "FORBORN"         ~ "Foreign-Born",
     variable == "children"        ~ "Has Children",
     variable == "FORLANG"         ~ "Non-Native Speaker",
-    variable == "ed_currently"    ~ "Currently in Education",
     variable == "ed_primary"      ~ "Primary Education",
     variable == "ed_secondary"    ~ "Secondary Education",
     variable == "ed_tertiary"     ~ "Tertiary Education",

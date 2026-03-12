@@ -601,7 +601,10 @@ df_gdp <- read_excel(here("Data", "mpd2023_web.xlsx"), sheet = "Full data", col_
 ```{r }
 
 df2 <- df2 %>%
-  left_join(df_gdp, by = c("iso3c"))
+  left_join(df_gdp, by = c("iso3c")) %>%
+  mutate(gdppc_cap = ifelse(gdppc < 60000, gdppc, 60000),
+         gdppc_k = gdppc_cap/1000,
+         gdppc_k_log = log(gdppc_k))
   
 write_rds(df, here("Data", "df.RDS"))
 

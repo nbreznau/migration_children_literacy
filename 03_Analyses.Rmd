@@ -38,7 +38,8 @@ packages <- c('tidyverse',
               'lmerTest',
               'broom.mixed',
               'viridis',
-              'survey')
+              'survey',
+              'ggpubr')
 
 pacman::p_load(packages, character.only = T)
 
@@ -135,8 +136,10 @@ df2_sub <- df2 %>%
 df2_sub <- df2_sub %>%
   group_by(iso3c) %>%
   mutate(
+    male = ifelse(female == 1, 0, 1),
     NFE12_between = sum(SPFWT0 * NFE12, na.rm = TRUE) / sum(SPFWT0[!is.na(NFE12)], na.rm = TRUE),
     female_between = sum(SPFWT0 * female, na.rm = TRUE) / sum(SPFWT0[!is.na(female)], na.rm = TRUE),
+    male_between = sum(SPFWT0 * male, na.rm = T) / sum(SPFWT0[!is.na(male)], na.rm = TRUE),
     children_between = sum(SPFWT0 * children, na.rm = TRUE) / sum(SPFWT0[!is.na(children)], na.rm = TRUE),
     ed3_secondary_between = sum(SPFWT0 * ed3_secondary, na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_secondary)], na.rm = TRUE),
     ed3_tertiary_between  = sum(SPFWT0 * ed3_tertiary,  na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_tertiary)],  na.rm = TRUE),
@@ -227,7 +230,7 @@ I first look at immigrants and native-born separately. Then combine them to dete
 
 ```{r}
 
-m1_imm_mlm <- lmer(
+M2.1 <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     female_within + female_between_z +
@@ -235,7 +238,6 @@ m1_imm_mlm <- lmer(
     forlang_within + forlang_between_z +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc +
     (1 | iso3c),
   data = df2_imm
 )
@@ -247,7 +249,7 @@ iso3c_intercepts <- ranef_list$iso3c
 
 
 
-m1_nat_mlm <- lmer(
+M2.2 <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     female_within + female_between_z +
@@ -255,12 +257,11 @@ m1_nat_mlm <- lmer(
     forlang_within + forlang_between_z +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc +
     (1 | iso3c),
   data = df2_nat
 )
 
-m2 <- lmer(
+M2.3a <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     children_within + children_between_z +
@@ -269,12 +270,25 @@ m2 <- lmer(
     forborn_within + forborn_between_z +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc +
     (1 | iso3c),
   data = subset(df2_sub)
 )
 
-m3 <- lmer(
+M2.3b <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    children_within + children_between_z +
+    female_within + female_between_z +
+    forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z +
+    ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    gdppc_k +
+    (1 | iso3c),
+  data = subset(df2_sub)
+)
+
+M2.4 <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     children_within + children_between_z +
@@ -284,7 +298,6 @@ m3 <- lmer(
     forborn_within*NFE12_within +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc +
     (1 | iso3c),
   data = subset(df2_sub)
 )
@@ -297,31 +310,52 @@ m3 <- lmer(
 ```{r}
 
 export_summs(
-  m1_imm_mlm, m1_nat_mlm, m2, m3,
-  model.names = c("Foreign-born", "Native-born", "Pooled", "Pooled with ALE interaction"),
+  M2.1, M2.2, M2.3a, M2.3b, M2.4,
+  #model.names = c("Foreign-born", "Native-born", "Pooled", "Pooled with ALE interaction"),
   to.file = "docx",
   file.name = here("Results", "Reg_Table_2.docx"
 ))
 
 ```
 
+#### GDP?
+
+The correlation is significant at p <0.1 without the US. The US is kind of a disaster in this figure. 
+
+```{r}
+test <- df2_sub %>%
+    group_by(iso3c) %>%
+    summarise(lit = first(skill_reading), gdp = first(gdppc_k))
+
+test_nousa <- subset(test, iso3c != "USA")
+
+ct <- cor.test(test$gdp, test$lit)
+ctusa <- cor.test(test_nousa$gdp, test_nousa$lit)
+
+lab <- sprintf("r = %.2f, p = %.3f", ct$estimate, ct$p.value)
+labusa <- sprintf("r = %.2f, p = %.3f", ctusa$estimate, ctusa$p.value)
+
+ggplot(test, aes(gdp, lit)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  annotate("text",
+           x = Inf, y = Inf,
+           label = lab,
+           hjust = 1.1, vjust = 1.5)
+
+# without the US
+ggplot(test_nousa, aes(gdp, lit)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  annotate("text",
+           x = Inf, y = Inf,
+           label = labusa,
+           hjust = 1.1, vjust = 1.5)
+
+```
 
 
 ### ATEs
-
-Type 1: Foreign-born mother, non-native speaker
-c(forborn_within = 1, children_within = 1, forlang_within = 1)
-
-Type 2: Foreign-born woman without children, non-native speaker" = c(forborn_within = 1, children_within = 0, forlang_within = 1)
-
-Type 3: Foreign-born mother, native speaker" = c(forborn_within = 1, children_within = 1, forlang_within = 0)
-
-Type 4: Foreign-born woman without children, native speaker" = c(forborn_within = 1, children_within = 0, forlang_within = 0)
-
-Type 5: Native-born mother, native speaker" = c(forborn_within = 0, children_within = 1, forlang_within = 0)
-
-Type 6: Native-born woman without children, native speaker" = c(forborn_within = 0, children_within = 0, forlang_within = 0)
-)
 
 #### T S2. Interactive GLM
 
@@ -344,12 +378,11 @@ m4 <- lmer(
     forborn_within + forborn_between_z +
     # interaction with all sub-interactions
     female_within*forborn_within*children_within*forlang_within*NFE12_within +
-    #ed_currently_within + ed_currently_between_z +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc +
+    gdppc_k_log +
     (1 | iso3c),
-  data = subset(df2)
+  data = subset(df2_sub)
 )
 
 
@@ -371,7 +404,7 @@ export_summs(
     "Secondary education (between)" = "ed3_secondary_between_z",
     "Tertiary education (within)" = "ed3_tertiary_within",
     "Tertiary education (between)" = "ed3_tertiary_between_z",
-    "GDP per capita" = "gdppc",
+    "GDP per capita (log k)" = "gdppc_k_log",
     "Female x Foreign-born (within)" = "female_within:forborn_within",
     "Female x Children (within)" = "female_within:children_within",
     "Children x Foreign-born (within)" = "children_within:forborn_within",      
@@ -399,17 +432,17 @@ export_summs(
     "ALE x Children x Foreign-language x Foreign-born" = "NFE12_within:children_within:forlang_within:forborn_within",
     "ALE x Female x Children x Foreign-language x Foreign-born" = "NFE12_within:female_within:children_within:forlang_within:forborn_within"
   ),
-  to.file = "html",
-  file.name = here("Results", "Table_S3.html")
+  to.file = "docx",
+  file.name = here("Results", "Table_S3.docx")
 )
 
-include_graphics(here("Results", "Table_S3.html"))
+include_graphics(here("Results", "Table_S3.docx"))
 ```
 #### Predictions
 
 ```{r}
 
-df2r <- subset(df2, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & !is.na(gdppc) & !is.na(skill_reading))
+df2r <- subset(df2_sub, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & !is.na(gdppc) & !is.na(skill_reading))
 
 
 
@@ -775,6 +808,138 @@ ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
 dev.off()
 
 include_graphics(here("Results", "Fig1.png"))
+```
+##### Fig 1. New Label
+
+
+```{r}
+
+
+----------------------------
+
+ame_all <- bind_rows(
+  ame_df  %>% mutate(sex = "f"),
+  ame_dfm %>% mutate(sex = "m")
+) %>%
+  mutate(
+    idx = as.integer(substr(type, 1, 1)),
+    sex = ifelse(grepl("^\\dm\\.", type), "m", "f")
+  )
+
+
+type_order <- ame_all %>%
+  distinct(type, idx, sex) %>%
+  arrange(idx, sex) %>%
+  pull(type)
+
+ame_all <- ame_all %>%
+  mutate(
+    type = factor(type, levels = rev(type_order))  # reverse for top-to-bottom display
+  )
+
+# Add binary indicators for the dot matrix
+
+ame_all <- ame_all %>%
+  mutate(
+    Female = ifelse(sex == "f", 1, 0),
+    `Foreign-born` = case_when(
+      idx %in% c(1, 2, 3, 4) ~ 1,
+      idx %in% c(5, 6) ~ 0
+    ),
+    `Non-native-speaker` = case_when(
+      idx %in% c(1, 2) ~ 1,
+      idx %in% c(3, 4, 5, 6) ~ 0
+    ),
+    Parent = case_when(
+      idx %in% c(1, 3, 5) ~ 1,
+      idx %in% c(2, 4, 6) ~ 0
+    )
+  )
+
+# Convert for dots
+
+dot_df <- ame_all %>%
+  select(type, Female, `Foreign-born`, `Non-native-speaker`, Parent) %>%
+  pivot_longer(
+    cols = c(Female, `Foreign-born`, `Non-native-speaker`, Parent),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(
+    variable = factor(
+      variable,
+      levels = c("Female", "Foreign-born", "Non-native-speaker", "Parent")
+    )
+  )
+
+# New labelling with dots in a matrix
+
+p_dots <- ggplot(dot_df, aes(x = variable, y = type)) +
+  geom_point(
+    data = subset(dot_df, value == 0),
+    shape = 21,
+    size = 3.2,
+    stroke = 0.5,
+    fill = "white",
+    color = "black"
+  ) +
+  geom_point(
+    data = subset(dot_df, value == 1),
+    shape = 16,
+    size = 3.2,
+    color = "black"
+  ) +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1)
+  )
+
+
+p_bar <- ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.55, color = "black") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Average Treatment Effect\nof Participation in ALE"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "none"
+  )
+
+# -----------------------------------
+# 5. Combine panels
+# -----------------------------------
+
+#p_final <- p_dots + p_bar +
+#  plot_layout(widths = c(1.1, 2.4))
+
+agg_png(here("Results", "Fig1_dotmatrix.png"), res = 144, height = 750, width = 1100)
+
+ggarrange(
+  p_dots,
+  p_bar,
+  ncol = 2,
+  widths = c(1.1, 2.4),
+  align = "h"
+)
+
+dev.off()
+
+include_graphics(here("Results", "Fig1_dotmatrix.png"))
+
 ```
 
 
