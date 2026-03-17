@@ -57,7 +57,7 @@ df2 <- read_rds(here("Data", "df2.RDS"))
 
 ## Regressions
 
-### Basic
+### Table 1. OLS
 
 
 
@@ -96,7 +96,7 @@ export_summs(
 )
 
 ```
-### Test for Sample Bias
+### Sample Bias Test
 
 Here I correlate the residuals with the weighting variable. If this is close to zero I can look at the sample as a representative treatment for ALE and literacy. 
 
@@ -118,7 +118,7 @@ testp3 <- cor.test(df_clean$aweight, df_clean$resid_clean)$p.value
 
 Correlations are `r round(testcor1,3)`, `r round(testcor2,3)`, & `r round(testcor3,3)`. With p-values `r round(testp1,4)`, `r round(testp2,4)`, & `r round(testp3,4)`. This suggests that there is no need to weight the sample. We are essentially controlling for the variables that lead to selection.
 
-### Multilevel
+### Table 2. GLM/Multilevel
 
 #### Recodes
 
@@ -242,7 +242,7 @@ M2.1 <- lmer(
   data = df2_imm
 )
 
-ranef_list <- ranef(m1_imm_mlm)
+ranef_list <- ranef(M2.1)
 
 # Get country-level grand intercept deviations
 iso3c_intercepts <- ranef_list$iso3c
@@ -357,7 +357,7 @@ ggplot(test_nousa, aes(gdp, lit)) +
 
 ### ATEs
 
-#### T S2. Interactive GLM
+### Table S2. Interactive GLM
 
 Here we interact all intersectional variables of interest with ALE (NFE12) to see the unique effects if any.
 
@@ -781,7 +781,7 @@ ame_all$type <- factor(ame_all$type, levels = rev(type_order))
 
 ```
 
-##### Fig 1 orig CIs
+##### Fig 1 Old Style orig CIs
 
 ```{r}
 
@@ -809,13 +809,12 @@ dev.off()
 
 include_graphics(here("Results", "Fig1.png"))
 ```
-##### Fig 1. New Label
+### Fig 1. New Label
 
 
 ```{r}
 
 
-----------------------------
 
 ame_all <- bind_rows(
   ame_df  %>% mutate(sex = "f"),
@@ -987,6 +986,8 @@ ame_all <- ame_all %>%
 
 ##### Fig 1 new CIs
 
+Makes no difference
+
 
 ```{r}
 
@@ -1149,6 +1150,7 @@ calc_country_gains <- function(df2_full, spec, AME, weight_var="aweight") {
 }
 
 ```
+
 #### ChatGPT.2
 
 ```{r}
@@ -1187,7 +1189,7 @@ nrow(specs_all)  # 80
 
 ```{r}
 # df2r is your prediction base; keep your existing filter
-df2r <- subset(df2, !is.na(female) & !is.na(NFE12) & !is.na(children_within) &
+df2r <- subset(df2_sub, !is.na(female) & !is.na(NFE12) & !is.na(children_within) &
                  !is.na(forborn_within) & !is.na(forlang_within) &
                  !is.na(ed3) & !is.na(gdppc) & !is.na(skill_reading))
 
@@ -1225,68 +1227,13 @@ ame_12 <- ame_12 %>%
 
 ```
 
-#### ChatGPT.4
-
-```{r}
-
-# Example default you described:
-# X group: foreign-born, female=0 (male), FORLANG=all, children=all
-spec_X <- list(female=0, FORBORN=1, FORLANG=NA, children=NA)
-
-# Y group: foreign-born, female=1 (female), FORLANG=all, children=all
-spec_Y <- list(female=1, FORBORN=1, FORLANG=NA, children=NA)
-
-ameX <- calc_ame_spec(m4, df2r, spec_X, weight_var="aweight")$AME
-ameY <- calc_ame_spec(m4, df2r, spec_Y, weight_var="aweight")$AME
-
-gainX <- calc_country_gains(df2, spec_X, AME=ameX, weight_var="aweight") %>%
-  rename(skill_gain_X = skill_gain, pct_group_X = pct_group, pct_group_noale_X = pct_group_noale)
-
-gainY <- calc_country_gains(df2, spec_Y, AME=ameY, weight_var="aweight") %>%
-  rename(skill_gain_Y = skill_gain, pct_group_Y = pct_group, pct_group_noale_Y = pct_group_noale)
-
-final_df_xy <- gainX %>%
-  left_join(gainY, by="iso3c", suffix=c("_X","_Y"))
+### Figure 3. Simulated Returns to ALE
+Take these from the shiny app 
 
 
 
-```
 
 
-#### ChatGPT.5
-
-```{r}
-library(ggrepel)
-library(scales)
-
-ggplot(final_df_xy, aes(
-  x = skill_gain_X,
-  y = skill_gain_Y,
-  label = iso3c,
-  size = pct_group_X
-)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "grey40") +
-  geom_point(aes(color = pct_group_noale_Y), alpha = 0.9) +
-  geom_text_repel(size = 3, max.overlaps = Inf) +
-  scale_size_continuous(
-    range = c(1, 6),
-    name = "% X group\nof pop",
-    labels = percent_format(accuracy = 1)
-  ) +
-  scale_color_gradient(
-    name = "% Y group\nno ALE",
-    low = "lightblue", high = "darkblue",
-    labels = percent_format(accuracy = 1)
-  ) +
-  labs(
-    title = "Simulated National Literacy Gains from Targeted ALE",
-    subtitle = "Country mean gain if all non-participants in the targeted group received the AME",
-    x = "Gain from X targeting",
-    y = "Gain from Y targeting"
-  ) +
-  theme_classic()
-
-```
 
 #### Save Objects for Shiny
 
@@ -1365,212 +1312,6 @@ saveRDS(spec_grid, here("Shiny", "precomp_spec_grid.rds"))
 
 
 
-
-
-
-#### Old
-
-
-
-Here we calculate how much skills would improve if every non-participant in ALE got a skill boost equal to the average in group 1 v. group 6. 
-
-#### Predict
-
-```{r}
-
-# Set AMEs
-AMEg1 <- -mean(pred10 - pred11)  # gain from ALE for Type 1
-AMEg6 <- -mean(pred60 - pred61)  # gain from ALE for Type 6
-AMEg1m <- -mean(pred10m - pred11m)  # gain from ALE for Type 1
-AMEg6m <- -mean(pred60m - pred61m)  # gain from ALE for Type 6
-
-# Boost literacy for Type 1 non-participants
-df_boost <- df2 %>%
-  mutate(
-    boost_type1 = ifelse(
-      female == 1 & NFE12 == 0 & FORBORN == 1 & children == 1 & FORLANG == 1,
-      skill_reading + AME1,
-      skill_reading
-    ),
-    boost_type6 = ifelse(
-      female == 1 & NFE12 == 0 & FORBORN == 0 & children == 0 & FORLANG == 0,
-      skill_reading + AME6,
-      skill_reading
-    ),
-    boost_type1m = ifelse(
-      female == 0 & NFE12 == 0 & FORBORN == 1 & children == 1 & FORLANG == 1,
-      skill_reading + AME1,
-      skill_reading
-    ),
-    boost_type6m = ifelse(
-      female == 0 & NFE12 == 0 & FORBORN == 0 & children == 0 & FORLANG == 0,
-      skill_reading + AME6,
-      skill_reading
-    )
-  )
-
-# Weighted mean literacy per country
-summary_by_country <- subset(df_boost, !is.na(female) & !is.na(children) & !is.na(FORBORN) & !is.na(FORLANG)) %>%
-  group_by(iso3c) %>%
-  summarise(
-    skill_base = weighted.mean(skill_reading, aweight, na.rm = TRUE),
-    skill_type1boost = weighted.mean(boost_type1, aweight, na.rm = TRUE) - skill_base,
-    skill_type6boost = weighted.mean(boost_type6, aweight, na.rm = TRUE) - skill_base,
-    skill_type1boostm = weighted.mean(boost_type1m, aweight, na.rm = TRUE) - skill_base,
-    skill_type6boostm = weighted.mean(boost_type6m, aweight, na.rm = TRUE) - skill_base
-  )
-
-# Total of national pop that are Type 1
-type1_shares <- df2 %>%
-  mutate(type1 = ifelse(
-    female == 1 & FORBORN == 1 & children == 1 & FORLANG == 1,
-    1, 0),
-    type1_noale = ifelse(
-      female == 1 & FORBORN == 1 & children == 1 & FORLANG == 1 & NFE12 == 0,
-    1, 0),
-    type6 = ifelse(female == 1 & FORBORN == 0 & children == 0 & FORLANG == 0, 1, 0 ),
-    type6_noALE = ifelse(female == 1 & FORBORN == 0 & NFE12 == 0 & children == 0 & FORLANG == 0, 1, 0 ),
-    type1m = ifelse(
-    female == 0 & FORBORN == 1 & children == 1 & FORLANG == 1,
-    1, 0),
-    type1_noalem = ifelse(
-      female == 0 & FORBORN == 1 & children == 1 & FORLANG == 1 & NFE12 == 0,
-    1, 0),
-    type6m = ifelse(female == 0 & FORBORN == 0 & children == 0 & FORLANG == 0, 1, 0 ),
-    type6_noALEm = ifelse(female == 0 & FORBORN == 0 & NFE12 == 0 & children == 0 & FORLANG == 0, 1, 0 )) %>%
-  group_by(iso3c) %>%
-  summarise(
-    pct_type1_totalpop = weighted.mean(type1, aweight, na.rm = TRUE),
-    pct_type1noale_totalpop = weighted.mean(type1_noale, aweight, na.rm = TRUE),
-    pct_type6_totalpop = weighted.mean(type6, aweight, na.rm = TRUE),
-    pct_type6_noALE_totalpop = weighted.mean(type6_noALE, aweight, na.rm = TRUE),
-    pct_type1_totalpopm = weighted.mean(type1m, aweight, na.rm = TRUE),
-    pct_type1noale_totalpopm = weighted.mean(type1_noalem, aweight, na.rm = TRUE),
-    pct_type6_totalpopm = weighted.mean(type6m, aweight, na.rm = TRUE),
-    pct_type6_noALE_totalpopm = weighted.mean(type6_noALEm, aweight, na.rm = TRUE),
-    pop18to65 = sum(SPFWT0, na.rm = TRUE)
-  )
-
-# Merge
-final_df <- summary_by_country %>% 
-  left_join(type1_shares, by = "iso3c") 
-  
-
-```
-
-#### Plot
-
-##### Females
-
-```{r}
-
-
-agg_png(here("Results", "Fig2.png"), res = 144, height = 750, width = 1000)
-
-ggplot(final_df, aes(
-  x = skill_type1boost,
-  y = skill_type6boost,
-  label = iso3c,
-  size = pct_type1_totalpop
-)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "grey40") +
-  geom_point(aes(color = pct_type6_noALE_totalpop), alpha = 0.9) +
-  geom_text_repel(size = 3, max.overlaps = Inf) +
-scale_size_continuous(
-  range = c(1, 6),
-  name = "% Type 1\nof tot pop",
-  breaks = c(0.001, 0.01, 0.03, 0.05),  
-  labels = scales::percent_format(accuracy = 1)
-) +
-  scale_color_gradient(
-  name = "% Type 6\nno ALE",
-  low = "lightblue", high = "darkblue",
-  labels = scales::percent_format(accuracy = 1)
-) +
-  labs(
-    title = "Simulated National Literacy Gains from Targeted ALE Females",
-    subtitle = "Boost in average female literacy if all non-participants in each group joined ALE",
-    x = "Overall gain to average literacy if all type 1 without ALE\nwere given an ALE treatment effect",
-    y = "Overall gain to average literacy if all type 6 without ALE\nwere given an ALE treatment effect"
-  ) +
-  theme_classic() +
-  theme(
-    legend.position = "right",
-    axis.title.x = element_text(size = 10),
-    axis.title.y = element_text(size = 10)
-  )
-
-dev.off()
-
-include_graphics(here("Results", "Fig2.png"))
-
-
-
-```
-
-##### Males
-
-```{r}
-
-
-agg_png(here("Results", "Fig2m.png"), res = 144, height = 750, width = 1000)
-
-ggplot(final_df, aes(
-  x = skill_type1boostm,
-  y = skill_type6boostm,
-  label = iso3c,
-  size = pct_type1_totalpopm
-)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "grey40") +
-  geom_point(aes(color = pct_type6_noALE_totalpopm), alpha = 0.9) +
-  geom_text_repel(size = 3, max.overlaps = Inf) +
-scale_size_continuous(
-  range = c(1, 6),
-  name = "% Type 1\nof tot pop",
-  breaks = c(0.001, 0.01, 0.03, 0.05),  
-  labels = scales::percent_format(accuracy = 1)
-) +
-  scale_color_gradient(
-  name = "% Type 6\nno ALE",
-  low = "lightblue", high = "darkblue",
-  labels = scales::percent_format(accuracy = 1)
-) +
-  labs(
-    title = "Simulated National Literacy Gains from Targeted ALE Males",
-    subtitle = "Boost in average male literacy if all non-participants in each group joined ALE",
-    x = "Overall gain to average literacy if all type 1 without ALE\nwere given an ALE treatment effect",
-    y = "Overall gain to average literacy if all type 6 without ALE\nwere given an ALE treatment effect"
-  ) +
-  theme_classic() +
-  theme(
-    legend.position = "right",
-    axis.title.x = element_text(size = 10),
-    axis.title.y = element_text(size = 10)
-  )
-
-dev.off()
-
-include_graphics(here("Results", "Fig2m.png"))
-
-
-
-```
-
-## Table of Group 6 and 1
-
-```{r}
-
-table_s3 <- final_df %>%
-  mutate(oftype1_pctwithout = pct_type1noale_totalpop/pct_type1_totalpop,
-         oftype6_pctwithout = pct_type6_noALE_totalpop/pct_type6_totalpop) %>%
-  select(iso3c, pop18to65, pct_type1_totalpop, pct_type1noale_totalpop, oftype1_pctwithout, pct_type6_totalpop, pct_type6_noALE_totalpop, oftype6_pctwithout)
-  
-
-kable(table_s3, format = "html", digits = 3, caption = "Table S3: Population Percentages and ALE Participation") %>%
-  save_kable(here("Results", "table_s3.html"))
-
-
-```
 
 
 ## Citations

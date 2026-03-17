@@ -196,6 +196,7 @@ ui <- fluidPage(
     
     mainPanel(
       plotOutput("scatter", height = 650),
+      downloadButton("download_plot", "Download PNG"),
       tableOutput("summary")
     )
   )
@@ -297,10 +298,13 @@ server <- function(input, output, session) {
       label = iso3c,
       size = pct_group_X
     )) +
-      geom_abline(slope = 1, intercept = 0, linetype="dotted", color="grey40") +
+      geom_abline(slope = 1, intercept = 0, linetype="dotted", color="grey40", linewidth = 1) +
+      
       geom_point(aes(color = pct_group_noale_Y), alpha = 0.9) +
-      scale_size_continuous(range=c(1,6), labels=percent_format(accuracy=1)) +
+      
+      scale_size_continuous(range=c(3,10), labels=percent_format(accuracy=1)) +
       scale_color_gradient(low="lightblue", high="darkblue", labels=percent_format(accuracy=1)) +
+      
       labs(
         x = "Gain from X targeting",
         y = "Gain from Y targeting\n(capped at size of X for each country)",
@@ -308,11 +312,62 @@ server <- function(input, output, session) {
         color = "% Y group\nno ALE",
         title = "Country gains: X vs Y"
       ) +
-      geom_text_repel(size=3, max.overlaps=Inf) +
-      theme_classic()
+      
+      geom_text_repel(size=5, max.overlaps=Inf) +
+      
+      theme_classic(base_size = 16) +
+      theme(
+        plot.title = element_text(size = 20, face = "bold"),
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 13),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12)
+      )
     
     p
-})
+  })
+  
+  output$download_plot <- downloadHandler(
+    filename = function() {
+      paste0("ale_plot_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      
+      r <- results()
+      df_xy <- r$df
+      
+      p <- ggplot(df_xy, aes(
+        x = skill_gain_X,
+        y = skill_gain_Y_capped,
+        label = iso3c,
+        size = pct_group_X
+      )) +
+        geom_abline(slope = 1, intercept = 0, linetype="dotted", color="grey40", linewidth = 1) +
+        geom_point(aes(color = pct_group_noale_Y), alpha = 0.9) +
+        scale_size_continuous(range=c(3,10), labels=percent_format(accuracy=1)) +
+        scale_color_gradient(low="lightblue", high="darkblue", labels=percent_format(accuracy=1)) +
+        labs(
+          x = "Gain from X targeting",
+          y = "Gain from Y targeting\n(capped at size of X for each country)",
+          size = "% X group",
+          color = "% Y group\nno ALE",
+          title = "Country gains: X vs Y"
+        ) +
+        geom_text_repel(size=5, max.overlaps=Inf) +
+        theme_classic(base_size = 16) +
+        theme(
+          plot.title = element_text(size = 20, face = "bold")
+        )
+      
+      ggsave(
+        file,
+        plot = p,
+        width = 12,
+        height = 8,
+        dpi = 300   # high resolution
+      )
+    }
+  )
   
   output$summary <- renderTable({
     r <- results()
