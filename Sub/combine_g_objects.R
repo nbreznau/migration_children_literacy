@@ -17,21 +17,20 @@ group_labels <- c(
 groups <- paste0("g", seq_along(group_labels))   # "g1" ... "g31"
 cycles <- c("df1", "df2")                        # cycle 1 and 2
 
-# --- generic fetcher for domain = "lit" or "num" ---
+# find lit and num
 fetch_stats_domain <- function(g, cyc, domain = c("lit", "num")) {
   domain <- match.arg(domain)
   
   mean_name <- paste0(g, "_mean_", domain, "_", cyc)
   se_name   <- paste0(g, "_se_",   domain, "_", cyc)
-  
-  mean_val <- get0(mean_name, ifnotfound = NA_real_)
-  se_val   <- get0(se_name,   ifnotfound = NA_real_)
+  ale_name  <- paste0(g, "_pct_ale_", cyc) # NEW ALE
   
   tibble(
-    group = g,
-    cycle = cyc,
-    mean  = as.numeric(mean_val),
-    se    = as.numeric(se_val)
+    group   = g,
+    cycle   = cyc,
+    mean    = as.numeric(get0(mean_name, ifnotfound = NA_real_)),
+    se      = as.numeric(get0(se_name,   ifnotfound = NA_real_)),
+    pct_ale = as.numeric(get0(ale_name,  ifnotfound = NA_real_))
   )
 }
 

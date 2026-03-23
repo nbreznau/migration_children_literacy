@@ -576,9 +576,12 @@ source(here("Sub", "combine_g_objects_pct.R"))
 # remove raw objects
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_df[12]$"))
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_diff$"))
-rm(list = ls(pattern = "^g[0-9]+_(pct)_lit01_df[12]$"))  # pct is literacy-only so far (num can be calculated the same way)
+rm(list = ls(pattern = "^g[0-9]+_(pct)_lit01_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_pct_ale_df[12]$"))
 
-# give unique naming
+# pct is literacy-only so far (num can be calculated the same way)
+
+# give unique naming (note that ALE is already included here so we don't need a new df for it)
 df_lit_all <- df_lit
 df_num_all <- df_num
 df_pct_level_1_or_less_all <- df_pct_level_1_or_less
@@ -657,6 +660,7 @@ source(here("Sub", "combine_g_objects_pct.R"))
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_df[12]$"))
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_diff$"))
 rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_pct_ale_df[12]$"))
 
 df_lit_de <- df_lit
 df_num_de <- df_num
@@ -674,30 +678,30 @@ rm(df_lit, df_num, df_pct_level_1_or_less)
 # All
 df_a2 <- df_lit_all %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean) %>%
+  select(group_label, mean, pct_ale) %>%
   drop_na(mean)
 
 # Rich
 df_a2_rich <- df_lit_rich %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean) %>%
+  select(group_label, mean, pct_ale) %>%
   drop_na(mean)
 
 # Europe
 df_a2_eur <- df_lit_eur %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean) %>%
+  select(group_label, mean, pct_ale) %>%
   drop_na(mean)
 
 # DE
 df_a2_de <- df_lit_de %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean) %>%
+  select(group_label, mean, pct_ale) %>%
   drop_na(mean)
 
 df_a2num_de <- df_num_de %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean) %>%
+  select(group_label, mean, pct_ale) %>%
   drop_na(mean)
 
 # ChatGPT made this cool hierarchy routine
@@ -797,6 +801,7 @@ df_a2num_de <- df_a2num_de %>%
 
 # organize data for plotting
 labels <- df_a2$group_label
+#labels <- df_a2_de$group_label
 
 children_map <- df_a2 %>%
   select(group_label, parent) %>%
@@ -1015,7 +1020,7 @@ edges_de_num <- df_a2num_de %>%
 
 ```{r}
 
-agg_png(here("Results", "Fig2A_A.png"), res = 576, width = 3200, height = 1900)
+agg_png(here("Results", "Fig2A_A.png"), res = 576, width = 3200, height = 2500)
 
 p <- ggplot(df_a2, aes(x = x, y = y, color = mean)) +
   geom_segment(
@@ -1030,28 +1035,35 @@ p <- ggplot(df_a2, aes(x = x, y = y, color = mean)) +
     vjust = -2.2, 
     size = 2.2, 
     color = "black"
-    ) +
+  ) +
+  geom_text(
+    aes(label = paste0("(", round(pct_ale, 0), "%)")),
+    vjust = -2.3, 
+    size = 1.4, 
+    color = "blue3",     
+    fontface = "italic"
+  ) +
   geom_text(
     aes(label = plot_label),
-    vjust = 3,
+    vjust = 4,
     size = 1.7,
     color = "black"
-    ) +
-  annotate("text", x = 12, y = 0, 
-           label = "A. All", size = 4) +
+  ) +
+  #annotate("text", x = 12, y = 0, 
+  #        label = "A. All", size = 4) +
   scale_color_viridis_c(name = "Literacy") +
   scale_y_reverse(
     breaks = 0:4,
     labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
     limits = c(4.1,-0.1)
-    ) +
+  ) +
   labs(
     x = NULL, y = "Group Splits",
     title = NULL
   ) +
   theme_classic() +
   theme(
-    legend.position = "none",
+    legend.position = "bottom",
     panel.grid.minor = element_blank(),
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()
@@ -1071,7 +1083,7 @@ include_graphics(here("Results", "Fig2A_A.png"))
 
 agg_png(here("Results", "Fig2A_B.png"), res = 576, width = 3200, height = 2250)
 
-p <- ggplot(df_a2_rich, aes(x = x, y = y, color = mean)) +
+prich <- ggplot(df_a2_rich, aes(x = x, y = y, color = mean)) +
   geom_segment(
     data = edges_rich,
     aes(x = x, y = y, xend = xend, yend = yend),
@@ -1084,21 +1096,28 @@ p <- ggplot(df_a2_rich, aes(x = x, y = y, color = mean)) +
     vjust = -2.2, 
     size = 2.2, 
     color = "black"
-    ) +
+  ) +
+  geom_text(
+    aes(label = paste0("(", round(pct_ale, 0), "%)")),
+    vjust = -2.3, 
+    size = 1.4, 
+    color = "blue4",     
+    fontface = "italic"
+  ) +
   geom_text(
     aes(label = plot_label),
-    vjust = 3,
+    vjust = 4,
     size = 1.7,
     color = "black"
-    ) +
+  ) +
   annotate("text", x = 12, y = 0, 
-           label = "B. Rich", size = 4) +
+           label = "B. High-income", size = 4) +
   scale_color_viridis_c(name = "Literacy") +
   scale_y_reverse(
     breaks = 0:4,
     labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
     limits = c(4.1,-0.1)
-    ) +
+  ) +
   labs(
     x = NULL, y = "Group Splits",
     title = NULL
@@ -1111,7 +1130,7 @@ p <- ggplot(df_a2_rich, aes(x = x, y = y, color = mean)) +
     axis.ticks.x = element_blank()
   )
 
-p
+prich
 
 dev.off()
 
@@ -1125,7 +1144,7 @@ include_graphics(here("Results", "Fig2A_B.png"))
 
 agg_png(here("Results", "Fig2A_C.png"), res = 576, width = 3200, height = 1900)
 
-p <- ggplot(df_a2_eur, aes(x = x, y = y, color = mean)) +
+peur <- ggplot(df_a2_eur, aes(x = x, y = y, color = mean)) +
   geom_segment(
     data = edges_eur,
     aes(x = x, y = y, xend = xend, yend = yend),
@@ -1138,13 +1157,20 @@ p <- ggplot(df_a2_eur, aes(x = x, y = y, color = mean)) +
     vjust = -2.2, 
     size = 2.2, 
     color = "black"
-    ) +
+  ) +
+  geom_text(
+    aes(label = paste0("(", round(pct_ale, 0), "%)")),
+    vjust = -2.3, 
+    size = 1.4, 
+    color = "blue4",     
+    fontface = "italic"
+  ) +
   geom_text(
     aes(label = plot_label),
-    vjust = 3,
+    vjust = 4,
     size = 1.7,
     color = "black"
-    ) +
+  ) +
   annotate("text", x = 12, y = 0, 
            label = "C. Europe", size = 4) +
   scale_color_viridis_c(name = "Literacy") +
@@ -1152,7 +1178,7 @@ p <- ggplot(df_a2_eur, aes(x = x, y = y, color = mean)) +
     breaks = 0:4,
     labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
     limits = c(4.1,-0.1)
-    ) +
+  ) +
   labs(
     x = NULL, y = "Group Splits",
     title = NULL
@@ -1165,7 +1191,7 @@ p <- ggplot(df_a2_eur, aes(x = x, y = y, color = mean)) +
     axis.ticks.x = element_blank()
   )
 
-p
+peur
 
 dev.off()
 
@@ -1194,13 +1220,20 @@ pde <- ggplot(df_a2_de, aes(x = x, y = y, color = mean)) +
     vjust = -2.2, 
     size = 2.2, 
     color = "black"
-    ) +
+  ) +
+  geom_text(
+    aes(label = paste0("(", round(pct_ale, 0), "%)")),
+    vjust = -2.3, 
+    size = 1.4, 
+    color = "blue4",    
+    fontface = "italic"
+  ) +
   geom_text(
     aes(label = plot_label),
-    vjust = 3,
+    vjust = 4,
     size = 1.7,
     color = "black"
-    ) +
+  ) +
   annotate("text", x = 12, y = 0, 
            label = "D. DEU", size = 4) +
   scale_color_viridis_c(name = "Literacy") +
@@ -1208,7 +1241,7 @@ pde <- ggplot(df_a2_de, aes(x = x, y = y, color = mean)) +
     breaks = 0:4,
     labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
     limits = c(4.1,-0.1)
-    ) +
+  ) +
   labs(
     x = NULL, y = "Group Splits",
     title = NULL
@@ -1222,6 +1255,7 @@ pde <- ggplot(df_a2_de, aes(x = x, y = y, color = mean)) +
   )
 
 pde
+
 
 dev.off()
 

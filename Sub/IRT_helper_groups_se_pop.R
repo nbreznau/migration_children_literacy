@@ -1,3 +1,29 @@
+# To calculate NFE12 (non IRT variables)
+svy_pct_yes <- function(varname, des, yes_value = 1) {
+  # Check variable exists
+  if (!(varname %in% names(des$variables))) return(NA_real_)
+
+  vals <- des$variables[[varname]]
+  
+  # Make sure NAs stay in the data as not 1's
+  target_vec <- ifelse(!is.na(vals) & vals == yes_value, 1, 0)
+  
+  # Add this recoded vector back to a temporary design object
+  des_tmp <- des
+  des_tmp$variables$.target_ale <- target_vec
+  
+  # Calculate weighted mean (no na.rm needed now as we removed NAs)
+  res <- tryCatch(
+    svymean(~.target_ale, des_tmp), 
+    error = function(e) return(NULL)
+  )
+  
+  if (is.null(res)) return(NA_real_)
+  
+  # Return as percentage
+  return(as.numeric(res)[1] * 100) 
+}
+
 calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
                            assign_to_env = TRUE,
                            target_env = .GlobalEnv) {
@@ -82,8 +108,12 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
       idx <- des$variables[[v]] == 1 & !is.na(des$variables[[v]])
       tryCatch(subset(des, idx), error = function(e) subset(des, FALSE))
     }
+    
     des1_g <- take1(df1_rep)
     des2_g <- take1(df2_rep)
+    
+    s1_ale <- svy_pct_yes("NFE12", des1_g)
+    s2_ale <- svy_pct_yes("NFE12", des2_g)
     
     s1 <- pv_stats_all(des1_g)
     s2 <- pv_stats_all(des2_g)
@@ -95,7 +125,9 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
       pct_lit01_df1    = s1$pct_lit01,
       mean_lit_df2     = s2$mean_lit,  se_lit_df2   = s2$se_lit,
       mean_num_df2     = s2$mean_num,  se_num_df2   = s2$se_num,
-      pct_lit01_df2    = s2$pct_lit01
+      pct_lit01_df2    = s2$pct_lit01,
+      pct_ale_df1      = s1_ale,
+      pct_ale_df2      = s2_ale
     )
     
     if (assign_to_env) {
@@ -105,9 +137,12 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
         assign(paste0(gname, "_se_lit_df1"),    s1$se_lit,    envir = target_env)
         assign(paste0(gname, "_mean_lit_df2"),  s2$mean_lit,  envir = target_env)
         assign(paste0(gname, "_se_lit_df2"),    s2$se_lit,    envir = target_env)
-        # NEW: % in Levels 0/1 (no SE)
+        # NEW.. % in Levels 0/1 (no SE)
         assign(paste0(gname, "_pct_lit01_df1"), s1$pct_lit01, envir = target_env)
         assign(paste0(gname, "_pct_lit01_df2"), s2$pct_lit01, envir = target_env)
+        # NEW - add NFE12
+        assign(paste0(gname, "_pct_ale_df1"), s1_ale, envir = target_env)
+        assign(paste0(gname, "_pct_ale_df2"), s2_ale, envir = target_env)
       }
       # numeracy PV means/SEs
       if (!is.null(pvnum) && length(pvnum) > 0 && !all(is.na(pvnum))) {
