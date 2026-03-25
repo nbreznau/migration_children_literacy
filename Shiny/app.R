@@ -4,18 +4,11 @@ library(ggplot2)
 library(ggrepel)
 library(scales)
 
-# saved objects from 03_Analyses.Rmd
-# no longer used this way but left for legacy
-#df2  <- readRDS("shiny_df2.rds")
-#df2r <- readRDS("shiny_df2r.rds")
-#m4   <- readRDS("shiny_m4.rds")
-
 # new, precomputed values (solves RAM problem on shinyapps.io)
 precomp <- readRDS("precomp_spec_country.rds")
 spec_grid <- readRDS("precomp_spec_grid.rds")
 
 # helpers
-
 map_within <- c(female="female_within", FORBORN="forborn_within", FORLANG="forlang_within", children="children_within")
 map_between <- c(female="female_between", FORBORN="forborn_between", FORLANG="forlang_between", children="children_between")
 vars_raw <- c("female", "FORBORN", "FORLANG", "children")
@@ -29,150 +22,57 @@ make_spec_id <- function(spec){
   )
 }
 
-# Build counterfactual newdata for predict(m4) consistent with within/between coding
-make_newdata_for_m4 <- function(df_base, spec, nfe_value) {
-  stopifnot(all(names(spec) %in% vars_raw))
-  nd <- df_base
-  
-  # Set NFE12 within directly to 0/1  (this is "within", so this is a strong intervention).
-  nd$NFE12_within <- nfe_value - nd$NFE12_between
-  
-  # For each targeting var: if spec is 0/1, set within = target - between; else leave as observed (population mix).
-  for (v in vars_raw) {
-    target <- spec[[v]]
-    if (!is.na(target)) {
-      w <- map_within[[v]]
-      b <- map_between[[v]]
-      nd[[w]] <- target - nd[[b]]
-    }
-  }
-  
-  nd
-}
-
-
-# Compute AME for a spec: E[pred(NFE=1) - pred(NFE=0)] (weighted)
-calc_ame_spec <- function(model_m4, df_base, spec, weight_var="aweight") {
-  nd0 <- make_newdata_for_m4(df_base, spec, nfe_value = 0)
-  nd1 <- make_newdata_for_m4(df_base, spec, nfe_value = 1)
-  
-  p0 <- predict(model_m4, newdata = nd0, re.form = NA)
-  p1 <- predict(model_m4, newdata = nd1, re.form = NA)
-  
-  d  <- p1 - p0  # gain from ALE
-  
-  w <- df_base[[weight_var]]
-  ok <- is.finite(d) & is.finite(w) & !is.na(w) & w > 0
-  d <- d[ok]; w <- w[ok]
-  
-  ame <- weighted.mean(d, w)
-  
-  # Simple weighted SE (design-based would be better; this is a pragmatic approximation)
-  se  <- sqrt( sum(w^2 * (d - ame)^2) / (sum(w)^2) )
-  ci  <- ame + c(-1, 1) * 1.96 * se
-  
-  list(AME = ame, SE = se, lower = ci[1], upper = ci[2])
-}
-
-# Identify who is "in the targeted group" given a spec (raw vars; NA means ignore)
-in_group <- function(df, spec) {
-  idx <- rep(TRUE, nrow(df))
-  for (v in vars_raw) {
-    target <- spec[[v]]
-    if (!is.na(target)) idx <- idx & (df[[v]] == target)
-  }
-  idx
-}
-
-# Population gain per country from targeting spec:
-#    Boost skill_reading by AME for those in group AND NFE12==0, then take weighted mean difference.
-calc_country_gains <- function(df2_full, spec, AME, weight_var="aweight") {
-  df <- df2_full
-  
-  g  <- in_group(df, spec)
-  treatable <- g & df$NFE12 == 0 & !is.na(df$skill_reading)
-  
-  df <- df %>%
-    mutate(
-      skill_boost = ifelse(treatable, skill_reading + AME, skill_reading),
-      g_total     = ifelse(g, 1, 0),
-      g_noale     = ifelse(g & NFE12 == 0, 1, 0)
-    )
-  
-  out <- df %>%
-    filter(!is.na(iso3c)) %>%
-    group_by(iso3c) %>%
-    summarise(
-      skill_base  = weighted.mean(skill_reading, .data[[weight_var]], na.rm = TRUE),
-      skill_gain  = weighted.mean(skill_boost,   .data[[weight_var]], na.rm = TRUE) - skill_base,
-      pct_group   = weighted.mean(g_total, .data[[weight_var]], na.rm = TRUE),
-      pct_group_noale = weighted.mean(g_noale, .data[[weight_var]], na.rm = TRUE),
-      pop18to65 = sum(SPFWT0, na.rm = TRUE),
-      .groups = "drop"
-    )
-  
-  out
-}
-
-# Apply capacity cap: only treat as many in Y (among Y & no ALE) as there are in X (as a pop share)
-cap_gains_to_X <- function(df_xy,
-                           cap_var = "pct_group_X",
-                           y_noale_var = "pct_group_noale_Y",
-                           y_gain_var = "skill_gain_Y") {
-  
-  df_xy %>%
-    mutate(
-      cap_share = .data[[cap_var]],
-      y_noale_share = .data[[y_noale_var]],
-      cap_ratio = dplyr::if_else(
-        is.na(y_noale_share) | y_noale_share <= 0,
-        0,
-        pmin(1, cap_share / y_noale_share)
-      ),
-      skill_gain_Y_capped = .data[[y_gain_var]] * cap_ratio
-    )
-}
-
-
 # User Interface
-
 choices_01all <- c("All" = "all", "0" = "0", "1" = "1")
 
 ui <- fluidPage(
-
+  
   titlePanel(
     tagList(
       "Targeting Adult Learning: Policy Intervention Simulator",
       tags$div(
         style = "font-size: 14px; margin-top: 4px;",
-        "Average literacy gain at the country-level when targeting group X"
+        "Average literacy gain at the country-level when targeting group X vs Group Y"
       ),
       tags$div(
         style = "font-size: 12px; color: #555;",
         "Estimated from PIAAC Cycle 2 data, 2022"
       )
-
     )
   ),
   
   sidebarLayout(
     sidebarPanel(
-      style = "position: relative; min-height: 650px;",
+      style = "position: relative; min-height: 850px;", #
+      
+      h4("Treatment Intervention Scenarios"),
+      radioButtons("intervention", label = NULL,
+                   choiceNames = list(
+                     HTML("<b>1. EQUAL </b> : Treat a maximum in Y, capped at the treatement rate in X."),
+                     HTML("<b>2. DOUBLE </b> : Assume treatment infrastructure enables max double the rate of X treated in Y."),
+                     HTML("<b>3. BLANK CHECK </b> : Treat every person without ALE in both groups.")
+                   ),
+                   choiceValues = list("equal", "double", "universal"),
+                   selected = "equal"
+      ),
+      
+      hr(),
+      
       h4("X group definition"),
       tags$div(
         style = "font-size: 12px; color: #444; margin-bottom: 8px;",
         HTML('<b>Guide:</b> 1 = yes, 0 = no, All = both')
       ),
-      selectInput("x_female",   "Female",            choices = choices_01all, selected = 0),
-      selectInput("x_FORBORN",  "Foreign-born",      choices = choices_01all, selected = 1),
+      selectInput("x_female",   "Female",            choices = choices_01all, selected = "1"),
+      selectInput("x_FORBORN",  "Foreign-born",      choices = choices_01all, selected = "1"),
       selectInput("x_FORLANG",  "Non-native speaker",choices = choices_01all, selected = "all"),
       selectInput("x_children", "Children",          choices = choices_01all, selected = "all"),
       
       hr(),
       
       h4("Y group definition"),
-      selectInput("y_female",   "Female",            choices = choices_01all, selected = "all"),
-      selectInput("y_FORBORN",  "Foreign-born",      choices = choices_01all, selected = 0),
+      selectInput("y_female",   "Female",            choices = choices_01all, selected = "1"),
+      selectInput("y_FORBORN",  "Foreign-born",      choices = choices_01all, selected = "0"),
       selectInput("y_FORLANG",  "Non-native speaker",choices = choices_01all, selected = "all"),
       selectInput("y_children", "Children",          choices = choices_01all, selected = "all"),
       
@@ -190,19 +90,35 @@ ui <- fluidPage(
       
       tags$div(
         style = "position: absolute; bottom: 10px; left: 10px;",
-        tags$img(src = "die.png", style = "width: 90px; height: auto;")
+        tags$img(src = "die.png", style = "width: 200px; height: auto;")
       )
     ),
     
     mainPanel(
-      plotOutput("scatter", height = 650),
+      h4("Country Details", style = "margin-top: 0px;"),
+      p(HTML("<b>Instruction:</b> Click on a country's dot in the scatterplot below to see detailed group statistics. (Defaults to Germany - DEU).")),
+      plotOutput("scatter", height = 650, click = "plot_click"),
       downloadButton("download_plot", "Download PNG"),
-      tableOutput("summary")
+      
+      hr(),
+      
+      h4(textOutput("selected_country_title")),
+      tableOutput("country_detail_table")
     )
   )
 )
 
 server <- function(input, output, session) {
+  
+  selected_country <- reactiveVal("DEU")
+  
+  observeEvent(input$plot_click, {
+    r <- results()
+    res <- nearPoints(r$df, input$plot_click, xvar = "skill_gain_X", yvar = "skill_gain_Y_capped", maxpoints = 1)
+    if (nrow(res) > 0) {
+      selected_country(res$iso3c[1]) 
+    }
+  })
   
   to_int_or_na <- function(x) {
     if (is.null(x) || identical(x, "all")) return(NA_integer_)
@@ -235,24 +151,28 @@ server <- function(input, output, session) {
       rename(skill_gain_X = skill_gain,
              pct_group_X = pct_group,
              pct_group_noale_X = pct_group_noale,
+             group_skill_base_X = group_skill_base,
              AME_X = AME, lower_X = lower, upper_X = upper)
     
     gainY <- precomp %>% filter(spec_id == idY) %>%
       rename(skill_gain_Y = skill_gain,
              pct_group_Y = pct_group,
              pct_group_noale_Y = pct_group_noale,
+             group_skill_base_Y = group_skill_base,
              AME_Y = AME, lower_Y = lower, upper_Y = upper)
     
     df_xy <- gainX %>% left_join(gainY, by="iso3c")
     
-    # cap Y to X capacity (same function you already have)
+    # DYNAMIC CAPPING LOGIC BASED ON USER INPUT
     df_xy <- df_xy %>% mutate(
-      cap_ratio = ifelse(pct_group_noale_Y <= 0 | is.na(pct_group_noale_Y), 0,
-                         pmin(1, pct_group_X / pct_group_noale_Y)),
+      cap_ratio = case_when(
+        input$intervention == "universal" ~ 1, # No cap, treat everyone
+        pct_group_noale_Y <= 0 | is.na(pct_group_noale_Y) ~ 0,
+        input$intervention == "double" ~ pmin(1, (2 * pct_group_noale_X) / pct_group_noale_Y), # Double capacity
+        TRUE ~ pmin(1, pct_group_noale_X / pct_group_noale_Y) # "equal" default
+      ),
       skill_gain_Y_capped = skill_gain_Y * cap_ratio
     )
-    
-    # ---- FIX AME EXTRACTION (ALWAYS SCALARS) ----
     
     ameX_row <- gainX %>% summarise(
       AME   = dplyr::first(AME_X),
@@ -286,35 +206,81 @@ server <- function(input, output, session) {
       ameY = ameY_out
     )
   })
+  
+  output$selected_country_title <- renderText({
+    paste("Detailed Statistics for:", selected_country())
+  })
+  
+  output$country_detail_table <- renderTable({
+    req(selected_country()) 
     
+    r <- results()
+    df_xy <- r$df
+    c_data <- df_xy %>% filter(iso3c == selected_country())
+    
+    if(nrow(c_data) == 0) return(NULL) 
+    
+    pct_noale_X <- ifelse(c_data$pct_group_X > 0, c_data$pct_group_noale_X / c_data$pct_group_X, 0)
+    pct_noale_Y <- ifelse(c_data$pct_group_Y > 0, c_data$pct_group_noale_Y / c_data$pct_group_Y, 0)
+    
+    # Calculate exactly what fraction of the country gets treated based on the cap
+    treated_country_share_X <- c_data$pct_group_noale_X
+    treated_country_share_Y <- c_data$pct_group_noale_Y * c_data$cap_ratio
+    
+    post_treat_X <- c_data$group_skill_base_X + (c_data$AME_X * pct_noale_X)
+    post_treat_Y <- c_data$group_skill_base_Y + (c_data$AME_Y * (pct_noale_Y * c_data$cap_ratio))
+    
+    data.frame(
+      Metric = c(
+        "Average Treatment Effect (AME)",
+        "% of Total Population in Group",
+        "% of Group without ALE in last 12m",
+        "Policy Intervention Size (% of Country Treated)",
+        "Average Group Literacy (Pre-intervention)",
+        "Expected Group Literacy (Post-intervention)"
+      ),
+      `Group X` = c(
+        sprintf("+%.2f points", c_data$AME_X),
+        sprintf("%.1f%%", c_data$pct_group_X * 100),
+        sprintf("%.1f%%", pct_noale_X * 100),
+        sprintf("%.1f%%", treated_country_share_X * 100),
+        sprintf("%.1f", c_data$group_skill_base_X), 
+        sprintf("%.1f", post_treat_X)
+      ),
+      `Group Y` = c(
+        sprintf("+%.2f points", c_data$AME_Y),
+        sprintf("%.1f%%", c_data$pct_group_Y * 100),
+        sprintf("%.1f%%", pct_noale_Y * 100),
+        sprintf("%.1f%%", treated_country_share_Y * 100), 
+        sprintf("%.1f", c_data$group_skill_base_Y), 
+        sprintf("%.1f", post_treat_Y)
+      ),
+      check.names = FALSE 
+    )
+  }, align = "lcc") 
   
   output$scatter <- renderPlot({
     r <- results()
     df_xy <- r$df
     
-    p <- ggplot(df_xy, aes(
+    ggplot(df_xy, aes(
       x = skill_gain_X,
       y = skill_gain_Y_capped,
       label = iso3c,
       size = pct_group_X
     )) +
       geom_abline(slope = 1, intercept = 0, linetype="dotted", color="grey40", linewidth = 1) +
-      
       geom_point(aes(color = pct_group_noale_Y), alpha = 0.9) +
-      
       scale_size_continuous(range=c(3,10), labels=percent_format(accuracy=1)) +
       scale_color_gradient(low="lightblue", high="darkblue", labels=percent_format(accuracy=1)) +
-      
       labs(
         x = "Gain from X targeting",
-        y = "Gain from Y targeting\n(capped at size of X for each country)",
+        y = "Gain from Y targeting",
         size = "% X group",
         color = "% Y group\nno ALE",
         title = "Country gains: X vs Y"
       ) +
-      
       geom_text_repel(size=5, max.overlaps=Inf) +
-      
       theme_classic(base_size = 16) +
       theme(
         plot.title = element_text(size = 20, face = "bold"),
@@ -323,8 +289,6 @@ server <- function(input, output, session) {
         legend.title = element_text(size = 14),
         legend.text = element_text(size = 12)
       )
-    
-    p
   })
   
   output$download_plot <- downloadHandler(
@@ -332,10 +296,8 @@ server <- function(input, output, session) {
       paste0("ale_plot_", Sys.Date(), ".png")
     },
     content = function(file) {
-      
       r <- results()
       df_xy <- r$df
-      
       p <- ggplot(df_xy, aes(
         x = skill_gain_X,
         y = skill_gain_Y_capped,
@@ -348,7 +310,7 @@ server <- function(input, output, session) {
         scale_color_gradient(low="lightblue", high="darkblue", labels=percent_format(accuracy=1)) +
         labs(
           x = "Gain from X targeting",
-          y = "Gain from Y targeting\n(capped at size of X for each country)",
+          y = "Gain from Y targeting",
           size = "% X group",
           color = "% Y group\nno ALE",
           title = "Country gains: X vs Y"
@@ -358,27 +320,9 @@ server <- function(input, output, session) {
         theme(
           plot.title = element_text(size = 20, face = "bold")
         )
-      
-      ggsave(
-        file,
-        plot = p,
-        width = 12,
-        height = 8,
-        dpi = 300   # high resolution
-      )
+      ggsave(file, plot = p, width = 12, height = 8, dpi = 300)
     }
   )
-  
-  output$summary <- renderTable({
-    r <- results()
-    data.frame(
-      target = c("X", "Y"),
-      AME = c(r$ameX$AME, r$ameY$AME),
-      lower = c(r$ameX$lower, r$ameY$lower),
-      upper = c(r$ameX$upper, r$ameY$upper)
-    )
-  }, digits = 3)
-  
 }
 
 shinyApp(ui, server)
