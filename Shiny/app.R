@@ -48,11 +48,11 @@ ui <- fluidPage(
       h4("Treatment Intervention Scenarios"),
       radioButtons("intervention", label = NULL,
                    choiceNames = list(
-                     HTML("<b>1. EQUAL </b> : Treat a maximum in Y, capped at the treatement rate in X."),
-                     HTML("<b>2. DOUBLE </b> : Assume treatment infrastructure enables max double the rate of X treated in Y."),
-                     HTML("<b>3. BLANK CHECK </b> : Treat every person without ALE in both groups.")
+                     HTML("<b>STRICT PARITY:</b> 50% of untreated in both groups, capped at absolute number of treated in X."),
+                     HTML("<b>LIMITED REACH:</b> Treat 25% of untreated in X, and max 1.5x the absolute X treatment in Y."),
+                     HTML("<b>BLANK CHECK:</b> Treat 75% of untreated in both groups.")
                    ),
-                   choiceValues = list("equal", "double", "universal"),
+                   choiceValues = list("equal", "limited", "universal"),
                    selected = "equal"
       ),
       
@@ -65,16 +65,16 @@ ui <- fluidPage(
       ),
       selectInput("x_female",   "Female",            choices = choices_01all, selected = "1"),
       selectInput("x_FORBORN",  "Foreign-born",      choices = choices_01all, selected = "1"),
-      selectInput("x_FORLANG",  "Non-native speaker",choices = choices_01all, selected = "all"),
-      selectInput("x_children", "Children",          choices = choices_01all, selected = "all"),
+      selectInput("x_FORLANG",  "Non-native speaker",choices = choices_01all, selected = "1"),
+      selectInput("x_children", "Children",          choices = choices_01all, selected = "1"),
       
       hr(),
       
       h4("Y group definition"),
       selectInput("y_female",   "Female",            choices = choices_01all, selected = "1"),
       selectInput("y_FORBORN",  "Foreign-born",      choices = choices_01all, selected = "0"),
-      selectInput("y_FORLANG",  "Non-native speaker",choices = choices_01all, selected = "all"),
-      selectInput("y_children", "Children",          choices = choices_01all, selected = "all"),
+      selectInput("y_FORLANG",  "Non-native speaker",choices = choices_01all, selected = "0"),
+      selectInput("y_children", "Children",          choices = choices_01all, selected = "1"),
       
       hr(),
       
@@ -103,7 +103,10 @@ ui <- fluidPage(
       hr(),
       
       h4(textOutput("selected_country_title")),
-      tableOutput("country_detail_table")
+      tableOutput("country_detail_table"),
+      
+      #conditional Denmark footnote (missing FORLANG)
+      uiOutput("dnk_footnote")
     )
   )
 )
@@ -114,11 +117,13 @@ server <- function(input, output, session) {
   
   observeEvent(input$plot_click, {
     r <- results()
-    res <- nearPoints(r$df, input$plot_click, xvar = "skill_gain_X", yvar = "skill_gain_Y_capped", maxpoints = 1)
+    # Update xvar and yvar to plot_gain
+    res <- nearPoints(r$df, input$plot_click, xvar = "plot_gain_X", yvar = "plot_gain_Y", maxpoints = 1)
     if (nrow(res) > 0) {
       selected_country(res$iso3c[1]) 
     }
   })
+
   
   to_int_or_na <- function(x) {
     if (is.null(x) || identical(x, "all")) return(NA_integer_)
@@ -152,6 +157,7 @@ server <- function(input, output, session) {
              pct_group_X = pct_group,
              pct_group_noale_X = pct_group_noale,
              group_skill_base_X = group_skill_base,
+             context_effect_X = context_effect, # ciontext effect
              AME_X = AME, lower_X = lower, upper_X = upper)
     
     gainY <- precomp %>% filter(spec_id == idY) %>%
@@ -159,9 +165,40 @@ server <- function(input, output, session) {
              pct_group_Y = pct_group,
              pct_group_noale_Y = pct_group_noale,
              group_skill_base_Y = group_skill_base,
+             context_effect_Y = context_effect, # context effect
              AME_Y = AME, lower_Y = lower, upper_Y = upper)
     
     df_xy <- gainX %>% left_join(gainY, by="iso3c")
+    
+    # Drop DNK if either group filters by FORLANG
+    if (input$x_FORLANG %in% c("0", "1") || input$y_FORLANG %in% c("0", "1")) {
+      df_xy <- df_xy %>% filter(iso3c != "DNK")
+    }
+    
+    # DYNAMIC FRACTION LOGIC BASED ON USER INPUT
+    df_xy <- df_xy %>% mutate(
+      treated_fraction_X = case_when(
+        input$intervention == "universal" ~ 0.75,
+        input$intervention == "equal" ~ 0.50,
+        TRUE ~ 0.25 # 'limited' default is 25%
+      ),
+      treated_share_X = pct_group_noale_X * treated_fraction_X,
+      
+      treated_fraction_Y = case_when(
+        input$intervention == "universal" ~ 0.75,
+        
+        #'equal'Caps Y at exactly 1x the absolute size of X's treated share
+        input$intervention == "equal" ~ ifelse(pct_group_noale_Y > 0, pmin(1, treated_share_X / pct_group_noale_Y), 0),
+        
+        # 'limited' capped at 1.5x the absolute size of X's treated share
+        TRUE ~ ifelse(pct_group_noale_Y > 0, pmin(1, (1.5 * treated_share_X) / pct_group_noale_Y), 0) 
+      ),
+      treated_share_Y = pct_group_noale_Y * treated_fraction_Y,
+      
+      # Multiply the theoretical 100%-reach skill_gain by the fraction actually treated
+      plot_gain_X = skill_gain_X * treated_fraction_X,
+      plot_gain_Y = skill_gain_Y * treated_fraction_Y
+    )
     
     # DYNAMIC CAPPING LOGIC BASED ON USER INPUT
     df_xy <- df_xy %>% mutate(
@@ -224,15 +261,32 @@ server <- function(input, output, session) {
     pct_noale_Y <- ifelse(c_data$pct_group_Y > 0, c_data$pct_group_noale_Y / c_data$pct_group_Y, 0)
     
     # Calculate exactly what fraction of the country gets treated based on the cap
-    treated_country_share_X <- c_data$pct_group_noale_X
-    treated_country_share_Y <- c_data$pct_group_noale_Y * c_data$cap_ratio
+    # Calculate exactly what fraction of the country gets treated
+    frac_X <- c_data$treated_fraction_X
+    frac_Y <- c_data$treated_fraction_Y
     
-    post_treat_X <- c_data$group_skill_base_X + (c_data$AME_X * pct_noale_X)
-    post_treat_Y <- c_data$group_skill_base_Y + (c_data$AME_Y * (pct_noale_Y * c_data$cap_ratio))
+    treated_country_share_X <- c_data$treated_share_X
+    treated_country_share_Y <- c_data$treated_share_Y
+    
+    pct_noale_X <- ifelse(c_data$pct_group_X > 0, c_data$pct_group_noale_X / c_data$pct_group_X, 0)
+    pct_noale_Y <- ifelse(c_data$pct_group_Y > 0, c_data$pct_group_noale_Y / c_data$pct_group_Y, 0)
+    
+    # Net effect floored at 0
+    net_effect_X <- max(0, c_data$AME_X + c_data$context_effect_X)
+    net_effect_Y <- max(0, c_data$AME_Y + c_data$context_effect_Y)
+    
+    # Post-treatment average
+    group_treated_pct_X <- pct_noale_X * frac_X
+    group_treated_pct_Y <- pct_noale_Y * frac_Y
+    
+    post_treat_X <- c_data$group_skill_base_X + (net_effect_X * group_treated_pct_X)
+    post_treat_Y <- c_data$group_skill_base_Y + (net_effect_Y * group_treated_pct_Y)
     
     data.frame(
       Metric = c(
         "Average Treatment Effect (AME)",
+        "Institutional Context (Deviation from Global Avg)",
+        "Net Treatment Effect (Floored at 0)",
         "% of Total Population in Group",
         "% of Group without ALE in last 12m",
         "Policy Intervention Size (% of Country Treated)",
@@ -241,17 +295,21 @@ server <- function(input, output, session) {
       ),
       `Group X` = c(
         sprintf("+%.2f points", c_data$AME_X),
+        sprintf("%+.2f points", c_data$context_effect_X),
+        sprintf("+%.2f points", net_effect_X),
         sprintf("%.1f%%", c_data$pct_group_X * 100),
         sprintf("%.1f%%", pct_noale_X * 100),
-        sprintf("%.1f%%", treated_country_share_X * 100),
+        sprintf("%.2f%%", treated_country_share_X * 100), #  precision to 2 decimals
         sprintf("%.1f", c_data$group_skill_base_X), 
         sprintf("%.1f", post_treat_X)
       ),
       `Group Y` = c(
         sprintf("+%.2f points", c_data$AME_Y),
+        sprintf("%+.2f points", c_data$context_effect_Y),
+        sprintf("+%.2f points", net_effect_Y),
         sprintf("%.1f%%", c_data$pct_group_Y * 100),
         sprintf("%.1f%%", pct_noale_Y * 100),
-        sprintf("%.1f%%", treated_country_share_Y * 100), 
+        sprintf("%.2f%%", treated_country_share_Y * 100), 
         sprintf("%.1f", c_data$group_skill_base_Y), 
         sprintf("%.1f", post_treat_Y)
       ),
@@ -263,9 +321,12 @@ server <- function(input, output, session) {
     r <- results()
     df_xy <- r$df
     
+    # Dynamically find the highest point to keep the square perfectly scaled
+    max_gain <- max(c(df_xy$plot_gain_X, df_xy$plot_gain_Y), na.rm = TRUE)
+    
     ggplot(df_xy, aes(
-      x = skill_gain_X,
-      y = skill_gain_Y_capped,
+      x = plot_gain_X,  # use dyanmic fraction
+      y = plot_gain_Y,  
       label = iso3c,
       size = pct_group_X
     )) +
@@ -273,6 +334,10 @@ server <- function(input, output, session) {
       geom_point(aes(color = pct_group_noale_Y), alpha = 0.9) +
       scale_size_continuous(range=c(3,10), labels=percent_format(accuracy=1)) +
       scale_color_gradient(low="lightblue", high="darkblue", labels=percent_format(accuracy=1)) +
+      
+      # Keep 45-degree line
+      coord_fixed(xlim = c(0, max_gain), ylim = c(0, max_gain)) + 
+      
       labs(
         x = "Gain from X targeting",
         y = "Gain from Y targeting",
@@ -298,9 +363,12 @@ server <- function(input, output, session) {
     content = function(file) {
       r <- results()
       df_xy <- r$df
+      
+      max_gain <- max(c(df_xy$plot_gain_X, df_xy$plot_gain_Y), na.rm = TRUE)
+      
       p <- ggplot(df_xy, aes(
-        x = skill_gain_X,
-        y = skill_gain_Y_capped,
+        x = plot_gain_X,
+        y = plot_gain_Y,
         label = iso3c,
         size = pct_group_X
       )) +
@@ -308,6 +376,7 @@ server <- function(input, output, session) {
         geom_point(aes(color = pct_group_noale_Y), alpha = 0.9) +
         scale_size_continuous(range=c(3,10), labels=percent_format(accuracy=1)) +
         scale_color_gradient(low="lightblue", high="darkblue", labels=percent_format(accuracy=1)) +
+        coord_fixed(xlim = c(0, max_gain), ylim = c(0, max_gain)) + 
         labs(
           x = "Gain from X targeting",
           y = "Gain from Y targeting",
@@ -323,6 +392,16 @@ server <- function(input, output, session) {
       ggsave(file, plot = p, width = 12, height = 8, dpi = 300)
     }
   )
+  
+  # Render the footnote when DNK is dropped
+  output$dnk_footnote <- renderUI({
+    if (input$x_FORLANG %in% c("0", "1") || input$y_FORLANG %in% c("0", "1")) {
+      tags$div(
+        style = "font-size: 11px; color: #666; font-style: italic; margin-top: 8px;",
+        "* DNK dropped from plot and analysis due to missing data on the foreign-language question."
+      )
+    }
+  })
 }
 
 shinyApp(ui, server)

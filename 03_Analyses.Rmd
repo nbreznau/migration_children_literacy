@@ -885,37 +885,12 @@ include_graphics(here("Results", "Fig1_sCI.png"))
 
 ```
 
-##### Fig 1 Slide Version
 
-```{r}
-
-agg_png(here("Results", "Fig1_keio.png"), res = 144, height = 1000, width = 550)
-
-ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
-  geom_col(width = 0.55, color = "black") +              # thinner bars
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
-  scale_fill_manual(values = pal12) +                    # 12 viridis colors
-  labs(
-    x = NULL,
-    y = "Average Treatment Effect\nof Participation in ALE",
-    fill = "Type"
-  ) +
-  coord_flip() +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y  = element_text(hjust = 1, size = 8),
-    axis.text.x  = element_text(size = 8),
-    axis.title.x = element_text(size = 8),
-    legend.position = "none"
-  )
-
-dev.off()
-
-include_graphics(here("Results", "Fig1_keio.png"))
-
-```
 
 ### Population Predictions
+
+
+
 
 #### Predictions
 
@@ -989,34 +964,26 @@ in_group <- function(df, spec) {
 # Population gain per country from targeting spec:
 # Boost skill_reading by AME for those in group AND NFE12==0, then take weighted mean difference.
 # Population gain per country from targeting spec
-calc_country_gains <- function(df2_full, spec, AME, weight_var="aweight") {
-  df <- df2_full
+calc_country_gains <- function(df2_full, spec, AME, ctx_data, weight_var="aweight") {
   
-  # 1. Evaluate group membership
+  df <- df2_full %>% 
+    left_join(ctx_data, by = "iso3c") %>% 
+    mutate(context_effect = replace_na(context_effect, 0))
+  
   g  <- in_group(df, spec)
-  
-  # CRITICAL FIX: Convert NAs to FALSE. 
-  # This prevents people with missing demographic data from being 
-  # silently dropped from the country's post-treatment denominator!
   g[is.na(g)] <- FALSE
   
-  # 2. Define who actually receives the treatment
   treatable <- g & df$NFE12 == 0 & !is.na(df$skill_reading)
   treatable[is.na(treatable)] <- FALSE
   
   df <- df %>%
     mutate(
-      # Because treatable is now strictly TRUE/FALSE, 
-      # no one gets an NA for skill_boost. The pre and post denominators remain identical.
-      skill_boost = ifelse(treatable, skill_reading + AME, skill_reading),
-      
+      net_effect  = pmax(0, AME + context_effect),
+      skill_boost = ifelse(treatable, skill_reading + net_effect, skill_reading),
       g_total     = ifelse(g, 1, 0),
-      
-      # Protect g_noale from NAs in NFE12
       g_noale     = ifelse(g & NFE12 == 0, 1, 0)
     )
   
-  # Double check to clear any remaining NAs
   df$g_noale[is.na(df$g_noale)] <- 0
   
   out <- df %>%
@@ -1027,11 +994,9 @@ calc_country_gains <- function(df2_full, spec, AME, weight_var="aweight") {
       skill_gain  = weighted.mean(skill_boost,   .data[[weight_var]], na.rm = TRUE) - skill_base,
       pct_group   = weighted.mean(g_total, .data[[weight_var]], na.rm = TRUE),
       pct_group_noale = weighted.mean(g_noale, .data[[weight_var]], na.rm = TRUE),
-      
-      # Baseline literacy of just the people in the target group
       group_skill_base = weighted.mean(skill_reading[g], .data[[weight_var]][g], na.rm = TRUE),
-      
       pop18to65 = sum(SPFWT0, na.rm = TRUE),
+      context_effect = first(context_effect),
       .groups = "drop"
     )
   
@@ -1075,18 +1040,36 @@ specs_all <- make_all_specs()
 nrow(specs_all)  # 80
 ```
 
-#### Final step
+#### ALE country effect
+
+The 'human capital potential' is the fixed group-specific effect that occurs across countries. However, there is likely a context effect of ALE (the capacity for and effectiveness of ALE for example although the exact mechanism is not observed and it is only a context effect) that can be modelled by random-slopes. 
+
+But I already have the group-specific results, based on a theoretical argument about a 'universal' potential of these groups. So I use these random-slopes for ALE as an offset, keeping the m4 slopes fixed.
+
+
+```{r}
+df2r$m4_baseline_pred <- predict(m4, re.form = NA)
+
+m5 <- lmer(skill_reading ~ 0 + offset(m4_baseline_pred) + (1 + NFE12_within | iso3c), 
+                      data = df2r)
+
+# Extract random slopes for ALE
+ctx_df <- ranef(m5)$iso3c %>% 
+  rownames_to_column("iso3c") %>% 
+  select(iso3c, context_effect = NFE12_within)
+
+```
 
 ```{r}
 
-df2r <- subset(df2_sub, !is.na(female) & !is.na(NFE12) & !is.na(children_within) &
+df2r <- subset(df2r, !is.na(female) & !is.na(NFE12) & !is.na(children_within) &
                  !is.na(forborn_within) & !is.na(forlang_within) &
                  !is.na(ed3) & !is.na(gdppc) & !is.na(skill_reading))
 
 ame_specs <- specs_all %>%
   mutate(res = pmap(select(., all_of(vars_raw)), \(female, FORBORN, FORLANG, children) {
     spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
-    calc_ame_spec(m4, df2r, spec, weight_var="aweight")
+    calc_ame_spec(m5, df2r, spec, weight_var="aweight")
   })) %>%
   mutate(
     AME   = map_dbl(res, "AME"),
@@ -1118,14 +1101,14 @@ ame_12 <- ame_12 %>%
 
 ```
 
-#### Save Objects for Shiny
+#### Save for Shiny
 
 ```{r}
-saveRDS(df2,  here("Shiny", "shiny_df2.rds"))
-saveRDS(df2r, here("Shiny", "shiny_df2r.rds"))
+#saveRDS(df2,  here("Shiny", "shiny_df2.rds"))
+#saveRDS(df2r, here("Shiny", "shiny_df2r.rds"))
 
 # Save model
-saveRDS(m4,   here("Shiny", "shiny_m4.rds"))
+#saveRDS(m4,   here("Shiny", "shiny_m4.rds"))
 
 # Save helper functions + mappings in one object
 shiny_helpers <- list(
@@ -1142,12 +1125,11 @@ saveRDS(shiny_helpers, here("Shiny", "shiny_helpers.rds"))
 ```
 
 
-##### Alternative precompute  
+#### Precompute  
 
 The RAM needed to run predict every time is too large for shinyapps.io, this precomputes everything
 
 ```{r}
-
 vars_raw <- c("female","FORBORN","FORLANG","children")
 
 spec_grid <- expand.grid(
@@ -1169,12 +1151,20 @@ spec_to_id <- function(row) {
 spec_grid$spec_id <- apply(spec_grid, 1, function(x) spec_to_id(as.list(x)))
 
 
+```
+
+
+
+```{r}
+
 precomp <- pmap_dfr(spec_grid, function(female, FORBORN, FORLANG, children, spec_id) {
   spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
-
+  
   ame <- calc_ame_spec(m4, df2r, spec, weight_var="aweight")
-  cg  <- calc_country_gains(df2, spec, AME=ame$AME, weight_var="aweight")
-
+  
+  # PASS ctx_df INTO THE FUNCTION HERE
+  cg  <- calc_country_gains(df2, spec, AME=ame$AME, ctx_data=ctx_df, weight_var="aweight")
+  
   cg$spec_id <- spec_id
   cg$AME     <- ame$AME
   cg$SE      <- ame$SE
