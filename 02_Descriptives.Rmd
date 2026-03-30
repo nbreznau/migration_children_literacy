@@ -1,7 +1,6 @@
 ---
-title: "Parenthood, Immigration and Further Education"
-subtitle: "Analyses and Visualizations"
-author: "Nate Breznau, Johannes Bonnes and Sylvia Rahn"
+title: "02 Descriptives"
+author: "Nate Breznau"
 output:
   word_document:
     toc: true
@@ -16,7 +15,7 @@ output:
     toc_depth: '1'
 ---
 
-NOTE: Linking error is necessary to compare SE across cycles. See ChatGPT output for a reccomendation for how to integrate it. 
+NOTE: Linking error is necessary to compare SE across cycles. Not doing that here, but take heed!
 
 ## Setup   
 
@@ -1592,6 +1591,18 @@ save_kable(table_16_out, file = here::here("Results", "Table_S2.html"))
 
 table_16_out
 ```
+
+### Calculate sample size
+
+Native born but non-native-speaking is very rare. Calculate percentages by group
+
+```{r}
+
+m_native = (1209+730)/(29373+18353+1209+730)
+f_native = (652+1459)/(40523+14459+1459+652)
+
+```
+
 
 ## Citations
 

@@ -1,7 +1,6 @@
 ---
-title: "Parenthood, Immigration and Further Education"
-subtitle: "Analyses and Visualizations"
-author: "Nate Breznau, Johannes Bonnes and Sylvia Rahn"
+title: "03 Main Analyses"
+author: "Nate Breznau"
 output:
   word_document:
     toc: true
@@ -61,8 +60,8 @@ df2 <- read_rds(here("Data", "df2.RDS"))
 ### Table 1. OLS
 
 
-
 ```{r}
+
 df_imm <- subset(df2, FORBORN == 1 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & ed_currently != 1 & !is.na(female))
 
 df_nat <- subset(df2, FORBORN == 0 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & ed_currently != 1 & !is.na(female))
@@ -124,7 +123,6 @@ Correlations are `r round(testcor1,3)`, `r round(testcor2,3)`, & `r round(testco
 #### Recodes
 
 ```{r}
-library(dplyr)
 
 df2_sub <- df2 %>%
   mutate(
@@ -133,7 +131,7 @@ df2_sub <- df2 %>%
   ) %>%
   subset(ed_currently != 1)
 
-# 1) within/between decomposition (weighted country means)
+# within/between decomposition (weighted country means)
 df2_sub <- df2_sub %>%
   group_by(iso3c) %>%
   mutate(
