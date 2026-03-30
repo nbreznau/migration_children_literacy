@@ -1,18 +1,7 @@
 ---
 title: "04 Robustness"
 author: "Nate Breznau"
-output:
-  word_document:
-    toc: true
-    toc_depth: '1'
-  html_document:
-    toc: true
-    toc_float: true
-    number_sections: true
-    toc_depth: 1
-  pdf_document:
-    toc: true
-    toc_depth: '1'
+
 ---
 
 I first tried running this with completed primary only (ed3 == 1) as a comparison group, but the case numbers were too small for some of the categories and prediction was unstable. Then I switched to completed secondary versus completed tertiary.
@@ -550,7 +539,7 @@ p_bar <- ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
   coord_flip() +
   labs(
     x = NULL,
-    y = "Average Treatment Effect\nof Participation in ALE"
+    y = "Without Tertiary\nEducation"
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -561,24 +550,7 @@ p_bar <- ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
     legend.position = "none"
   )
 
-# Coombine panels
 
-#p_final <- p_dots + p_bar +
-#  plot_layout(widths = c(1.1, 2.4))
-
-agg_png(here("Results", "Fig1_ed1.png"), res = 144, height = 750, width = 1100)
-
-ggarrange(
-  p_dots,
-  p_bar,
-  ncol = 2,
-  widths = c(1.1, 2.4),
-  align = "h"
-)
-
-dev.off()
-
-include_graphics(here("Results", "Fig1_ed1.png"))
 
 ```
 
@@ -985,79 +957,20 @@ ame_all <- ame_all %>%
     type = factor(type, levels = rev(type_order))  # reverse for top-to-bottom display
   )
 
-# Add binary indicators for the dot matrix
-
-ame_all <- ame_all %>%
-  mutate(
-    Female = ifelse(sex == "f", 1, 0),
-    `Foreign-born` = case_when(
-      idx %in% c(1, 2, 3, 4) ~ 1,
-      idx %in% c(5, 6) ~ 0
-    ),
-    `Non-native-speaker` = case_when(
-      idx %in% c(1, 2) ~ 1,
-      idx %in% c(3, 4, 5, 6) ~ 0
-    ),
-    Parent = case_when(
-      idx %in% c(1, 3, 5) ~ 1,
-      idx %in% c(2, 4, 6) ~ 0
-    )
-  )
-
-# Convert for dots
-
-dot_df <- ame_all %>%
-  select(type, Female, `Foreign-born`, `Non-native-speaker`, Parent) %>%
-  pivot_longer(
-    cols = c(Female, `Foreign-born`, `Non-native-speaker`, Parent),
-    names_to = "variable",
-    values_to = "value"
-  ) %>%
-  mutate(
-    variable = factor(
-      variable,
-      levels = c("Female", "Foreign-born", "Non-native-speaker", "Parent")
-    )
-  )
-
-# New labelling with dots in a matrix
-
-p_dots <- ggplot(dot_df, aes(x = variable, y = type)) +
-  geom_point(
-    data = subset(dot_df, value == 0),
-    shape = 21,
-    size = 3.2,
-    stroke = 0.5,
-    fill = "white",
-    color = "black"
-  ) +
-  geom_point(
-    data = subset(dot_df, value == 1),
-    shape = 16,
-    size = 3.2,
-    color = "black"
-  ) +
-  labs(x = NULL, y = NULL) +
-  theme_minimal(base_size = 12) +
-  theme(
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_blank(),
-    axis.text.x = element_text(size = 10, angle = 45, hjust = 1)
-  )
 
 
-p_bar <- ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+
+
+p_bar_t <- ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
   geom_col(width = 0.55, color = "black") +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
   scale_fill_manual(values = pal12) +
-  scale_y_continuous(breaks = seq(0, 60, by = 5)) +
+  #scale_y_continuous(breaks = seq(0, 60, by = 5)) +
+  scale_y_continuous(breaks = seq(0, 30, by = 5), limits = c(0, 30)) +
   coord_flip() +
   labs(
     x = NULL,
-    y = "Average Treatment Effect\nof Participation in ALE"
+    y = "Tertiary Education"
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -1068,29 +981,138 @@ p_bar <- ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
     legend.position = "none"
   )
 
+
+
+```
+
 # Coombine panels
+```{r}
+
+
 
 #p_final <- p_dots + p_bar +
 #  plot_layout(widths = c(1.1, 2.4))
 
-agg_png(here("Results", "Fig1_ed23.png"), res = 144, height = 750, width = 1100)
+agg_png(here("Results", "Fig1_ed.png"), res = 144, height = 750, width = 1000)
 
 ggarrange(
   p_dots,
   p_bar,
-  ncol = 2,
-  widths = c(1.1, 2.4),
+  p_bar_t,
+  ncol = 3,
+  widths = c(1.4, 1.4, 1.4),
   align = "h"
 )
 
 dev.off()
 
-include_graphics(here("Results", "Fig1_ed23.png"))
-
+include_graphics(here("Results", "Fig1_ed.png"))
 ```
 
 
+### Shiny App
 
+This requires that 03_Analyses.Rmd has been run and has all objects/helpers loaded. 
+
+```{r}
+
+# NON-TERTIARY
+
+# Re-run  non-tertiary GLM 
+m4_ed1 <- lmer(
+  skill_reading ~ NFE12_within + NFE12_between_z + female_within + female_between_z + 
+    children_within + children_between_z + forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z + 
+    female_within*forborn_within*children_within*forlang_within*NFE12_within +
+    ed3_secondary_within + ed3_secondary_between_z + gdppc_k_log + (1 | iso3c),
+  data = df2_sub
+)
+
+# Subset for predictions (Non-tertiary)
+df2r_ed1 <- subset(df2_sub, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & 
+                   !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & 
+                   !is.na(gdppc) & !is.na(skill_reading))
+
+# Calculate Context Effects (m5) for Non-tertiary
+df2r_ed1$m4_baseline_pred <- predict(m4_ed1, re.form = NA)
+m5_ed1 <- lmer(skill_reading ~ 0 + offset(m4_baseline_pred) + (1 + NFE12_within | iso3c), data = df2r_ed1)
+
+ctx_df_ed1 <- ranef(m5_ed1)$iso3c %>% 
+  rownames_to_column("iso3c") %>% 
+  select(iso3c, context_effect = NFE12_within)
+
+# Run Precomputation Loop for Non-tertiary
+precomp_ed1 <- pmap_dfr(spec_grid, function(female, FORBORN, FORLANG, children, spec_id) {
+  spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
+  ame <- calc_ame_spec(m4_ed1, df2r_ed1, spec, weight_var="aweight")
+  # Use df2_sub so population percentages represent the Non-tertiary population
+  cg  <- calc_country_gains(df2_sub, spec, AME=ame$AME, ctx_data=ctx_df_ed1, weight_var="aweight")
+  
+  cg$spec_id <- spec_id
+  cg$AME     <- ame$AME
+  cg$SE      <- ame$SE
+  cg$lower   <- ame$lower
+  cg$upper   <- ame$upper
+  cg$ed_level <- "Non-tertiary"
+  cg
+})
+
+
+# TERTIARY 
+
+# Re-run the tertiary GLM 
+m4_ed3 <- lmer(
+  skill_reading ~ NFE12_within + NFE12_between_z + female_within + female_between_z + 
+    children_within + children_between_z + forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z +
+    female_within*forborn_within*children_within*forlang_within*NFE12_within +
+    gdppc_k_log + (1 | iso3c),
+  data = df2_sub_ed3
+)
+
+# Subset for predictions (Tertiary)
+df2r_ed3 <- subset(df2_sub_ed3, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & 
+                   !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & 
+                   !is.na(gdppc) & !is.na(skill_reading))
+
+# Calculate Context Effects (m5) for Tertiary
+df2r_ed3$m4_baseline_pred <- predict(m4_ed3, re.form = NA)
+m5_ed3 <- lmer(skill_reading ~ 0 + offset(m4_baseline_pred) + (1 + NFE12_within | iso3c), data = df2r_ed3)
+
+ctx_df_ed3 <- ranef(m5_ed3)$iso3c %>% 
+  rownames_to_column("iso3c") %>% 
+  select(iso3c, context_effect = NFE12_within)
+
+# Run Precomputation Loop for Tertiary
+precomp_ed3 <- pmap_dfr(spec_grid, function(female, FORBORN, FORLANG, children, spec_id) {
+  spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
+  ame <- calc_ame_spec(m4_ed3, df2r_ed3, spec, weight_var="aweight")
+  # Use df2_sub_ed3 so population percentages represent the Tertiary population
+  cg  <- calc_country_gains(df2_sub_ed3, spec, AME=ame$AME, ctx_data=ctx_df_ed3, weight_var="aweight")
+  
+  cg$spec_id <- spec_id
+  cg$AME     <- ame$AME
+  cg$SE      <- ame$SE
+  cg$lower   <- ame$lower
+  cg$upper   <- ame$upper
+  cg$ed_level <- "Tertiary"
+  cg
+})
+
+
+
+# Load the original "All" precomputed generated in 03_Analyses.Rmd
+
+precomp_all <- readRDS(here("Shiny", "precomp_spec_country.rds"))
+# Add the education level identifier
+precomp_all$ed_level <- "All"
+
+# Combine all three datasets
+precomp_combined <- bind_rows(precomp_all, precomp_ed1, precomp_ed3)
+
+# Overwrite the file with the new combined data
+saveRDS(precomp_combined, here("Shiny", "precomp_spec_country.rds"))
+```
 
 ## Citations
 
