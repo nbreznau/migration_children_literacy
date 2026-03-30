@@ -17,20 +17,22 @@ group_labels <- c(
 groups <- paste0("g", seq_along(group_labels))   # "g1" ... "g31"
 cycles <- c("df1", "df2")                        # cycle 1 and 2
 
-# find lit and num
+#  lit and num
 fetch_stats_domain <- function(g, cyc, domain = c("lit", "num")) {
   domain <- match.arg(domain)
   
   mean_name <- paste0(g, "_mean_", domain, "_", cyc)
   se_name   <- paste0(g, "_se_",   domain, "_", cyc)
-  ale_name  <- paste0(g, "_pct_ale_", cyc) # NEW ALE
+  ale_name  <- paste0(g, "_pct_ale_", cyc) # ALE
+  sec_name  <- paste0(g, "_pct_sec_", cyc) # % secondary
   
   tibble(
     group   = g,
     cycle   = cyc,
     mean    = as.numeric(get0(mean_name, ifnotfound = NA_real_)),
     se      = as.numeric(get0(se_name,   ifnotfound = NA_real_)),
-    pct_ale = as.numeric(get0(ale_name,  ifnotfound = NA_real_))
+    pct_ale = as.numeric(get0(ale_name,  ifnotfound = NA_real_)),
+    pct_sec = as.numeric(get0(sec_name,  ifnotfound = NA_real_))
   )
 }
 
@@ -50,6 +52,5 @@ build_df_domain <- function(domain = c("lit", "num"),
     )
 }
 
-# ---- outputs (match old df_lit exactly; plus df_num) ----
 df_lit <- build_df_domain("lit")
 df_num <- build_df_domain("num")

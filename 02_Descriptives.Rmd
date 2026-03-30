@@ -32,7 +32,8 @@ packages <- c('tidyverse',
               'ggrepel',
               'ragg',
               'survey',
-              'kableExtra')
+              'kableExtra',
+              'scales')
 
 pacman::p_load(packages, character.only = T)
 
@@ -578,6 +579,7 @@ rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_df[12]$"))
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_(lit|num)_diff$"))
 rm(list = ls(pattern = "^g[0-9]+_(pct)_lit01_df[12]$"))
 rm(list = ls(pattern = "^g[0-9]+_pct_ale_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_pct_sec_df[12]$"))
 
 # pct is literacy-only so far (num can be calculated the same way)
 
@@ -611,6 +613,8 @@ source(here("Sub", "combine_g_objects_pct.R"))
 # remove raw objects
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
 rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_pct_ale_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_pct_sec_df[12]$"))
 
 # unique names
 df_lit_rich <- df_lit
@@ -634,6 +638,8 @@ source(here("Sub", "combine_g_objects_pct.R"))
 
 rm(list = ls(pattern = "^g[0-9]+_(mean|se)_lit_df[12]$"))
 rm(list = ls(pattern = "^g[0-9]+_(pct|se)_lit01_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_pct_ale_df[12]$"))
+rm(list = ls(pattern = "^g[0-9]+_pct_sec_df[12]$"))
 
 df_lit_eur <- df_lit
 df_pct_level_1_or_less_eur <- df_pct_level_1_or_less
@@ -642,7 +648,7 @@ df_pct_level_1_or_less_eur <- df_pct_level_1_or_less
 
 #### Germany only
 
-This is for a blog post predecessor to the study in the GrundbildungsPFADE project out of curiosity 
+This is for a blog post predecessor to the study in the GrundbildungsPFADE project out of curiosity - makes a good figure to add to the paper
 
 ```{r}
 group_vars = c("ALL", "male", "female", "male_not", "male_fb", "female_not", "female_fb", "male_not_natlang", "male_not_notnatlang", "male_fb_natlang", "male_fb_notnatlang", "female_not_natlang", "female_not_notnatlang", "female_fb_natlang", "female_fb_notnatlang", "male_not_natlang_child", "male_not_notnatlang_child", "male_fb_natlang_child", "male_fb_notnatlang_child", "male_not_natlang_nochild", "male_not_notnatlang_nochild", "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", "female_not_natlang_child", "female_not_notnatlang_child", "female_fb_natlang_child", "female_fb_notnatlang_child", "female_not_natlang_nochild", "female_not_notnatlang_nochild", "female_fb_natlang_nochild", "female_fb_notnatlang_nochild")
@@ -674,34 +680,44 @@ rm(df_lit, df_num, df_pct_level_1_or_less)
 #### Prep dfs
 
 ```{r}
+# function for mapping viridis onto different scalings, e.g., literacy versus percedntages
+map_viridis <- function(x) {
+  pal <- viridis_pal()(100) # Get 100 viridis colors
+  # Cut the numeric vector into 100 bins and map to palette
+  idx <- as.numeric(cut(x, breaks = 100))
+  
+  res <- rep(NA_character_, length(x))
+  res[!is.na(idx)] <- pal[idx[!is.na(idx)]]
+  return(res)
+}
 
 # All
 df_a2 <- df_lit_all %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean, pct_ale) %>%
+  select(group_label, mean, pct_ale, pct_sec) %>%
   drop_na(mean)
 
 # Rich
 df_a2_rich <- df_lit_rich %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean, pct_ale) %>%
+  select(group_label, mean, pct_ale, pct_sec) %>%
   drop_na(mean)
 
 # Europe
 df_a2_eur <- df_lit_eur %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean, pct_ale) %>%
+  select(group_label, mean, pct_ale, pct_sec) %>%
   drop_na(mean)
 
 # DE
 df_a2_de <- df_lit_de %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean, pct_ale) %>%
+  select(group_label, mean, pct_ale, pct_sec) %>%
   drop_na(mean)
 
 df_a2num_de <- df_num_de %>%
   filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
-  select(group_label, mean, pct_ale) %>%
+  select(group_label, mean, pct_ale, pct_sec) %>%
   drop_na(mean)
 
 # ChatGPT made this cool hierarchy routine
@@ -746,7 +762,7 @@ df_a2num_de <- df_a2num_de %>%
     parent = vapply(group_label, parent_of, character(1))
   )
 
-# make a label map vector instead of using case_match each time
+# make a label map vector instead of case_match each time
 
 plot_label_map <- c(
   "ALL" = "Entire Population",
@@ -977,6 +993,23 @@ df_a2num_de <- df_a2num_de %>%
     y = depth
   )
 
+# map colors using new viridis scale function
+
+df_a2 <- df_a2 %>%
+  mutate(color_lit = map_viridis(mean), color_ale = map_viridis(pct_ale), color_sec = map_viridis(pct_sec))
+
+df_a2_rich <- df_a2_rich %>%
+  mutate(color_lit = map_viridis(mean), color_ale = map_viridis(pct_ale), color_sec = map_viridis(pct_sec))
+
+df_a2_eur <- df_a2_eur %>%
+  mutate(color_lit = map_viridis(mean), color_ale = map_viridis(pct_ale), color_sec = map_viridis(pct_sec))
+
+df_a2_de <- df_a2_de %>%
+  mutate(color_lit = map_viridis(mean), color_ale = map_viridis(pct_ale), color_sec = map_viridis(pct_sec))
+
+df_a2num_de <- df_a2num_de %>%
+  mutate(color_lit = map_viridis(mean), color_ale = map_viridis(pct_ale), color_sec = map_viridis(pct_sec))
+
 #conmecting lines
 edges <- df_a2 %>%
   #mutate(y = y + 1) %>%
@@ -1016,54 +1049,141 @@ edges_de_num <- df_a2num_de %>%
 
 ```
 
-#### A. All
+
+#### Scale adjustment
 
 ```{r}
 
-agg_png(here("Results", "Fig2A_A.png"), res = 576, width = 3200, height = 2500)
+x_sclr <- 3
 
-p <- ggplot(df_a2, aes(x = x, y = y, color = mean)) +
+df_a2 <- df_a2 %>%
+  mutate(x = x * x_sclr)
+
+edges <- edges %>%
+  mutate(xend = xend * x_sclr,
+         x = x * x_sclr)
+
+df_a2_rich <- df_a2_rich %>%
+  mutate(x = x * x_sclr)
+
+edges_rich <- edges_rich %>%
+  mutate(xend = xend * x_sclr,
+         x = x * x_sclr)
+
+df_a2_eur <- df_a2_eur %>%
+  mutate(x = x * x_sclr)
+
+edges_eur <- edges_eur %>%
+  mutate(xend = xend * x_sclr,
+         x = x * x_sclr)
+
+df_a2_de <- df_a2_de %>%
+  mutate(x = x * x_sclr)
+
+edges_de <- edges_de %>%
+  mutate(xend = xend * x_sclr,
+         x = x * x_sclr)
+
+```
+#### A. All
+
+
+
+
+```{r}
+
+agg_png(here("Results", "Fig2A_A.png"), res = 200, width = 2000, height = 1000)
+
+# Petal size parameters 
+rx <- 0.8   # Horizontal radius
+ry <- 0.15  # Vertical radius 
+
+# Dynamic Legend Coordinates
+# Find  far-left and far-right 
+min_x <- min(df_a2$x, na.rm = TRUE) + 8
+max_x <- max(df_a2$x, na.rm = TRUE) - 8
+
+leg_x <- min_x + 1       # Top-left anchor for the flower legend
+leg_y <- 0               # Aligned vertically with the root "ALL" node
+
+bar_w <- (max_x - min_x) * 0.15  # Width of the color bar (15% of total plot width)
+bar_x <- max_x - bar_w   # Top-right anchor for the color bar
+bar_y <- 0
+
+
+p <- ggplot(df_a2, aes(x = x, y = y)) +
+  # Connecting Lines
   geom_segment(
     data = edges,
     aes(x = x, y = y, xend = xend, yend = yend),
     color = "grey75",
     linetype = "dotted"
   ) +
-  geom_point(size = 5) +
-  geom_text(
-    aes(label = round(mean, 0)), 
-    vjust = -2.2, 
-    size = 2.2, 
-    color = "black"
+  
+  # FLOWER PETALS (DATA)
+  # 4 o'clock Petal (ALE)
+  geom_segment(
+    aes(xend = x + rx * 0.866, yend = y + ry * 0.7, color = color_ale),
+    linewidth = 3.5, lineend = "round"
   ) +
-  geom_text(
-    aes(label = paste0("(", round(pct_ale, 0), "%)")),
-    vjust = -2.3, 
-    size = 1.4, 
-    color = "blue3",     
-    fontface = "italic"
+  # 8 o'clock Petal (Secondary Ed)
+  geom_segment(
+    aes(xend = x - rx * 0.866, yend = y + ry * 0.7, color = color_sec),
+    linewidth = 3.5, lineend = "round"
   ) +
-  geom_text(
-    aes(label = plot_label),
-    vjust = 4,
-    size = 1.7,
-    color = "black"
+  # 12 o'clock Petal (Literacy)
+  geom_segment(
+    aes(xend = x, yend = y - ry, color = color_lit),
+    linewidth = 3.5, lineend = "round"
   ) +
-  #annotate("text", x = 12, y = 0, 
-  #        label = "A. All", size = 4) +
-  scale_color_viridis_c(name = "Literacy") +
+  
+  # === PETAL LABELS (DATA) === 
+  geom_text(aes(x = x, y = y - ry - 0.1, label = round(mean, 0)), vjust = 0, hjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x + rx * 0.866 + 0.3, y = y + ry * 0.5 + 0.05, label = paste0("  ", round(pct_ale, 0), c("%", rep("", 30)))), hjust = 0, vjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x - rx * 0.866 - 0.3, y = y + ry * 0.5 + 0.05, label = paste0(round(pct_sec, 0), c("% ", rep("  ", 30)))), hjust = 1, vjust = 0.5, size = 2.2, color = "black") +
+  
+  # GROUP SPLIT LABELS
+  geom_text(aes(label = plot_label), vjust = 5.0, size = 1.9, color = "black") +
+  
+  # Top-Left FLOWER LEGEND
+  # Grey Petals for the Key
+  annotate("segment", x = leg_x, xend = leg_x, y = leg_y, yend = leg_y - ry, linewidth = 3.5, color = "grey60", lineend = "round") +
+  annotate("segment", x = leg_x, xend = leg_x + rx * 0.866, y = leg_y, yend = leg_y + ry * 0.7, linewidth = 3.5, color = "grey60", lineend = "round") +
+  annotate("segment", x = leg_x, xend = leg_x - rx * 0.866, y = leg_y, yend = leg_y + ry * 0.7, linewidth = 3.5, color = "grey60", lineend = "round") +
+  # Line-break Text Labels for the Key (\n creates the new line)
+  annotate("text", x = leg_x, y = leg_y - ry - 0.15, label = "Literacy\n(Avg.)", vjust = 0, hjust = 0.5, size = 2.2, color = "black") +
+  annotate("text", x = leg_x + rx * 0.866 + 4.5, y = leg_y + ry * 0.5 + 0.05, label = "ALE partici-\npation (%)", hjust = 0.5, vjust = 0.5, size = 2.2, color = "black") +
+  annotate("text", x = leg_x - rx * 0.866 - 4.5, y = leg_y + ry * 0.5 + 0.05, label = "Secondary ed\ncompletion (%)", hjust = 0.5, vjust = 0.5, size = 2.2, color = "black") +
+  
+  # Top right legend
+  # connected rectangles gradient bar
+  annotate("rect", 
+           xmin = bar_x + (0:8) * (bar_w/9), 
+           xmax = bar_x + (1:9) * (bar_w/9), 
+           ymin = bar_y + 0.09, 
+           ymax = bar_y + 0.15, 
+           fill = viridis_pal()(9)) +
+  annotate("text", x = bar_x - 0.3, y = bar_y + 0.12, label = "Lowest values", hjust = 1, vjust = 0.5, size = 2.2, color = "black") +
+  annotate("text", x = bar_x + bar_w + 0.3, y = bar_y + 0.12, label = "Highest values", hjust = 0, vjust = 0.5, size = 2.2, color = "black") +
+  
+  # Interpret pre-calculated hex literal
+  scale_color_identity() +
+  
+  # Expand ylimits 
   scale_y_reverse(
     breaks = 0:4,
-    labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
-    limits = c(4.1,-0.1)
+    labels = c("All", "Gender", "Migration", "Language", "Parenthood"),
+    limits = c(4.5, -0.6) # Slightly expanded to ensure the top legend labels don't get cut off
   ) +
   labs(
-    x = NULL, y = "Group Splits",
+    x = NULL, y = NULL,
     title = NULL
   ) +
+  annotate("text", x = 40, y = -0.3, 
+      label = "A. All Countries", size = 4) +
   theme_classic() +
   theme(
-    legend.position = "bottom",
+    legend.position = "none",
     panel.grid.minor = element_blank(),
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()
@@ -1074,115 +1194,59 @@ p
 dev.off()
 
 include_graphics(here("Results", "Fig2A_A.png"))
-
 ```
+
+
 
 #### B. Rich
 
 ```{r}
 
-agg_png(here("Results", "Fig2A_B.png"), res = 576, width = 3200, height = 2250)
+agg_png(here("Results", "Fig2A_B.png"), res = 200, width = 1850, height = 1000)
 
-prich <- ggplot(df_a2_rich, aes(x = x, y = y, color = mean)) +
+rx <- 0.8   
+ry <- 0.15  
+bar_w <- (max_x - min_x) * 0.15  
+bar_x <- max_x - bar_w   
+bar_y <- 0
+
+p <- ggplot(df_a2_rich, aes(x = x, y = y)) +
   geom_segment(
     data = edges_rich,
     aes(x = x, y = y, xend = xend, yend = yend),
     color = "grey75",
     linetype = "dotted"
   ) +
-  geom_point(size = 5) +
-  geom_text(
-    aes(label = round(mean, 0)), 
-    vjust = -2.2, 
-    size = 2.2, 
-    color = "black"
-  ) +
-  geom_text(
-    aes(label = paste0("(", round(pct_ale, 0), "%)")),
-    vjust = -2.3, 
-    size = 1.4, 
-    color = "blue4",     
-    fontface = "italic"
-  ) +
-  geom_text(
-    aes(label = plot_label),
-    vjust = 4,
-    size = 1.7,
-    color = "black"
-  ) +
-  annotate("text", x = 12, y = 0, 
-           label = "B. High-income", size = 4) +
-  scale_color_viridis_c(name = "Literacy") +
-  scale_y_reverse(
-    breaks = 0:4,
-    labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
-    limits = c(4.1,-0.1)
-  ) +
-  labs(
-    x = NULL, y = "Group Splits",
-    title = NULL
-  ) +
-  theme_classic() +
-  theme(
-    legend.position = "bottom",
-    panel.grid.minor = element_blank(),
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank()
-  )
-
-prich
-
-dev.off()
-
-include_graphics(here("Results", "Fig2A_B.png"))
-
-```
-
-#### C. Europe
-
-```{r}
-
-agg_png(here("Results", "Fig2A_C.png"), res = 576, width = 3200, height = 1900)
-
-peur <- ggplot(df_a2_eur, aes(x = x, y = y, color = mean)) +
   geom_segment(
-    data = edges_eur,
-    aes(x = x, y = y, xend = xend, yend = yend),
-    color = "grey75",
-    linetype = "dotted"
+    aes(xend = x + rx * 0.866, yend = y + ry * 0.7, color = color_ale),
+    linewidth = 3.5, lineend = "round"
   ) +
-  geom_point(size = 5) +
-  geom_text(
-    aes(label = round(mean, 0)), 
-    vjust = -2.2, 
-    size = 2.2, 
-    color = "black"
+  geom_segment(
+    aes(xend = x - rx * 0.866, yend = y + ry * 0.7, color = color_sec),
+    linewidth = 3.5, lineend = "round"
   ) +
-  geom_text(
-    aes(label = paste0("(", round(pct_ale, 0), "%)")),
-    vjust = -2.3, 
-    size = 1.4, 
-    color = "blue4",     
-    fontface = "italic"
+  geom_segment(
+    aes(xend = x, yend = y - ry, color = color_lit),
+    linewidth = 3.5, lineend = "round"
   ) +
-  geom_text(
-    aes(label = plot_label),
-    vjust = 4,
-    size = 1.7,
-    color = "black"
-  ) +
-  annotate("text", x = 12, y = 0, 
-           label = "C. Europe", size = 4) +
-  scale_color_viridis_c(name = "Literacy") +
+  
+  geom_text(aes(x = x, y = y - ry - 0.1, label = round(mean, 0)), vjust = 0, hjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x + rx * 0.866 + 0.3, y = y + ry * 0.5 + 0.05, label = paste0("  ", round(pct_ale, 0), c("%", rep("", 30)))), hjust = 0, vjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x - rx * 0.866 - 0.3, y = y + ry * 0.5 + 0.05, label = paste0(round(pct_sec, 0), c("% ", rep("  ", 30)))), hjust = 1, vjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(label = plot_label), vjust = 5.0, size = 1.9, color = "black") +
+
+  scale_color_identity() +
   scale_y_reverse(
     breaks = 0:4,
-    labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
-    limits = c(4.1,-0.1)
+    labels = c("", "", "", "", ""),
+    limits = c(4.5, -0.6) 
   ) +
   labs(
-    x = NULL, y = "Group Splits",
+    x = NULL, y = NULL,
     title = NULL
   ) +
+  annotate("text", x = 40, y = -0.3, 
+        label = "B. Rich", size = 4) +
   theme_classic() +
   theme(
     legend.position = "none",
@@ -1191,7 +1255,71 @@ peur <- ggplot(df_a2_eur, aes(x = x, y = y, color = mean)) +
     axis.ticks.x = element_blank()
   )
 
-peur
+p
+
+dev.off()
+
+include_graphics(here("Results", "Fig2A_B.png"))
+```
+
+#### C. Europe
+
+```{r}
+
+agg_png(here("Results", "Fig2A_C.png"), res = 200, width = 2000, height = 1000)
+
+rx <- 0.8   
+ry <- 0.15  
+bar_w <- (max_x - min_x) * 0.15  
+bar_x <- max_x - bar_w   
+bar_y <- 0
+
+p <- ggplot(df_a2_eur, aes(x = x, y = y)) +
+  geom_segment(
+    data = edges_eur,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    color = "grey75",
+    linetype = "dotted"
+  ) +
+  geom_segment(
+    aes(xend = x + rx * 0.866, yend = y + ry * 0.7, color = color_ale),
+    linewidth = 3.5, lineend = "round"
+  ) +
+  geom_segment(
+    aes(xend = x - rx * 0.866, yend = y + ry * 0.7, color = color_sec),
+    linewidth = 3.5, lineend = "round"
+  ) +
+  geom_segment(
+    aes(xend = x, yend = y - ry, color = color_lit),
+    linewidth = 3.5, lineend = "round"
+  ) +
+  
+  geom_text(aes(x = x, y = y - ry - 0.1, label = round(mean, 0)), vjust = 0, hjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x + rx * 0.866 + 0.3, y = y + ry * 0.5 + 0.05, label = paste0("  ", round(pct_ale, 0), c("%", rep("", 30)))), hjust = 0, vjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x - rx * 0.866 - 0.3, y = y + ry * 0.5 + 0.05, label = paste0(round(pct_sec, 0), c("% ", rep("  ", 30)))), hjust = 1, vjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(label = plot_label), vjust = 5.0, size = 1.9, color = "black") +
+
+  scale_color_identity() +
+  scale_y_reverse(
+    breaks = 0:4,
+    labels = c("All", "Gender", "Migration", "Language", "Parenthood"),
+    limits = c(4.5, -0.6) 
+  ) +
+  labs(
+    x = NULL, y = NULL,
+    title = NULL
+  ) +
+  annotate("text", x = 40, y = -0.3, 
+           label = "C. Europe", size = 4) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+p
 
 dev.off()
 
@@ -1199,63 +1327,66 @@ include_graphics(here("Results", "Fig2A_C.png"))
 
 ```
 
-#### DE ONLY
+#### D. DEU
 
 ##### Lit English Labels
 
 ```{r}
 
-agg_png(here("Results", "Fig2A_D.png"), res = 576, width = 3200, height = 2250)
+agg_png(here("Results", "Fig2A_D.png"), res = 200, width = 1850, height = 1000)
 
-pde <- ggplot(df_a2_de, aes(x = x, y = y, color = mean)) +
+rx <- 0.8   
+ry <- 0.15  
+bar_w <- (max_x - min_x) * 0.15  
+bar_x <- max_x - bar_w   
+bar_y <- 0
+
+p <- ggplot(df_a2_de, aes(x = x, y = y)) +
   geom_segment(
     data = edges_de,
     aes(x = x, y = y, xend = xend, yend = yend),
     color = "grey75",
     linetype = "dotted"
   ) +
-  geom_point(size = 5) +
-  geom_text(
-    aes(label = round(mean, 0)), 
-    vjust = -2.2, 
-    size = 2.2, 
-    color = "black"
+  geom_segment(
+    aes(xend = x + rx * 0.866, yend = y + ry * 0.7, color = color_ale),
+    linewidth = 3.5, lineend = "round"
   ) +
-  geom_text(
-    aes(label = paste0("(", round(pct_ale, 0), "%)")),
-    vjust = -2.3, 
-    size = 1.4, 
-    color = "blue4",    
-    fontface = "italic"
+  geom_segment(
+    aes(xend = x - rx * 0.866, yend = y + ry * 0.7, color = color_sec),
+    linewidth = 3.5, lineend = "round"
   ) +
-  geom_text(
-    aes(label = plot_label),
-    vjust = 4,
-    size = 1.7,
-    color = "black"
+  geom_segment(
+    aes(xend = x, yend = y - ry, color = color_lit),
+    linewidth = 3.5, lineend = "round"
   ) +
-  annotate("text", x = 12, y = 0, 
-           label = "D. DEU", size = 4) +
-  scale_color_viridis_c(name = "Literacy") +
+  
+  geom_text(aes(x = x, y = y - ry - 0.1, label = round(mean, 0)), vjust = 0, hjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x + rx * 0.866 + 0.3, y = y + ry * 0.5 + 0.05, label = paste0("  ", round(pct_ale, 0), c("%", rep("", 30)))), hjust = 0, vjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(x = x - rx * 0.866 - 0.3, y = y + ry * 0.5 + 0.05, label = paste0(round(pct_sec, 0), c("% ", rep("  ", 30)))), hjust = 1, vjust = 0.5, size = 2.2, color = "black") +
+  geom_text(aes(label = plot_label), vjust = 5.0, size = 1.9, color = "black") +
+
+  scale_color_identity() +
   scale_y_reverse(
     breaks = 0:4,
-    labels = c("All", "Sex", "Migration", "Language", "Parenthood"),
-    limits = c(4.1,-0.1)
+    labels = c("", "", "", "", ""),
+    limits = c(4.5, -0.6) 
   ) +
   labs(
-    x = NULL, y = "Group Splits",
+    x = NULL, y = NULL,
     title = NULL
   ) +
+  annotate("text", x = 40, y = -0.3, 
+           label = "D. DEU", size = 4) +
   theme_classic() +
   theme(
-    legend.position = "bottom",
+    legend.position = "none",
     panel.grid.minor = element_blank(),
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()
   )
 
-pde
-
+p
 
 dev.off()
 
@@ -1390,6 +1521,78 @@ dev.off()
 include_graphics(here("Results", "Fig2A_D_Num_Deutsch.png"))
 
 ```
+
+
+## Tbl S2. Intersectional Descriptives (16 Groups)
+
+The unweighted N and sec education % were moved to Fig A2 construction
+
+```{r}
+# Fig A2 group labels
+group_labels_16 <- c(
+  "male_not_natlang_child", "male_not_notnatlang_child", 
+  "male_fb_natlang_child", "male_fb_notnatlang_child", 
+  "male_not_natlang_nochild", "male_not_notnatlang_nochild", 
+  "male_fb_natlang_nochild", "male_fb_notnatlang_nochild", 
+  "female_not_natlang_child", "female_not_notnatlang_child", 
+  "female_fb_natlang_child", "female_fb_notnatlang_child", 
+  "female_not_natlang_nochild", "female_not_notnatlang_nochild", 
+  "female_fb_natlang_nochild", "female_fb_notnatlang_nochild"
+)
+
+# Extract Literacy from Fig A2 data
+df_figA2_values <- df_lit_all %>%
+  filter(cycle %in% c("df2", "Cycle 2", "Cycle 2 (2022)", "2022")) %>%
+  filter(group_label %in% group_labels_16) %>%
+  select(group_label, Literacy_wmean = mean, ALE_pct_wmean = pct_ale)
+
+# Calculate Unweighted N and Sec Education from df2
+df2_calc <- df2 %>%
+  filter(ed_currently != 1) %>% 
+  filter(!is.na(female) & !is.na(FORBORN) & !is.na(FORLANG) & 
+         !is.na(children) & !is.na(ed3)) %>%
+  mutate(
+    ed_sec_or_higher = ifelse(ed3 %in% c(2, 3), 1, 0),
+    # labwel for joining
+    group_label = paste0(
+      ifelse(female == 1, "female", "male"), "_",
+      ifelse(FORBORN == 1, "fb", "not"), "_",
+      ifelse(FORLANG == 1, "notnatlang", "natlang"), "_",
+      ifelse(children == 1, "child", "nochild")
+    )
+  ) %>%
+  group_by(group_label, female, FORBORN, FORLANG, children) %>%
+  summarise(
+    N_unweighted = n(),
+    SecEd_pct_wmean = weighted.mean(ed_sec_or_higher, SPFWT0, na.rm = TRUE) * 100,
+    .groups = "drop"
+  )
+
+
+table_16_groups <- df_figA2_values %>%
+  left_join(df2_calc, by = "group_label") %>%
+  mutate(
+    Gender = ifelse(female == 1, "Female", "Male"),
+    Origin = ifelse(FORBORN == 1, "Foreign-born", "Native-born"),
+    Language = ifelse(FORLANG == 1, "Non-native speaker", "Native speaker"),
+    Parenthood = ifelse(children == 1, "Parent", "Childless")
+  ) %>%
+  select(Gender, Origin, Language, Parenthood, N_unweighted, Literacy_wmean, ALE_pct_wmean, SecEd_pct_wmean) %>%
+  arrange(desc(Gender), desc(Origin), Language, desc(Parenthood))
+
+table_16_out <- table_16_groups %>%
+  kable("html", 
+        digits = 1, 
+        caption = "Descriptive Statistics for 16 Intersectional Groups (Cycle 2)",
+        col.names = c("Gender", "Origin", "Language", "Parenthood", "N (Cases)", "Mean Literacy", "ALE Participation (%)", "Sec. Ed or Higher (%)")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+
+save_kable(table_16_out, file = here::here("Results", "Table_S2.html"))
+
+table_16_out
+```
+
 ## Citations
 
 ```{r}

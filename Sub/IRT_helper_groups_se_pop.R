@@ -1,20 +1,23 @@
-# To calculate NFE12 (non IRT variables)
+# --- Helper Functions ---
+
+# Generalized to handle single or multiple "yes" values (e.g., 1 or c(2, 3))
 svy_pct_yes <- function(varname, des, yes_value = 1) {
   # Check variable exists
   if (!(varname %in% names(des$variables))) return(NA_real_)
-
+  
   vals <- des$variables[[varname]]
   
-  # Make sure NAs stay in the data as not 1's
-  target_vec <- ifelse(!is.na(vals) & vals == yes_value, 1, 0)
+  # Recode: If value is in the 'yes_value' vector, it's a 1. 
+  # Everything else (including NA) is 0 to keep them in the denominator.
+  target_vec <- ifelse(!is.na(vals) & (vals %in% yes_value), 1, 0)
   
   # Add this recoded vector back to a temporary design object
   des_tmp <- des
-  des_tmp$variables$.target_ale <- target_vec
+  des_tmp$variables$.target_stat <- target_vec
   
-  # Calculate weighted mean (no na.rm needed now as we removed NAs)
+  # Calculate weighted mean
   res <- tryCatch(
-    svymean(~.target_ale, des_tmp), 
+    svymean(~.target_stat, des_tmp), 
     error = function(e) return(NULL)
   )
   
@@ -29,7 +32,7 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
                            target_env = .GlobalEnv) {
   library(survey)
   
-  # safe svymean that returns both mean and within-imputation variance (SE^2)
+  # --- Internal Helpers for PVs ---
   svymean_mean_var <- function(var, des) {
     if (is.na(var) || is.null(var) || !nzchar(var)) return(c(NA_real_, NA_real_))
     f <- as.formula(paste0("~", var))
@@ -38,7 +41,6 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
     c(as.numeric(coef(fit))[1], as.numeric(SE(fit))[1]^2)
   }
   
-  # helper: proportion below a cutoff for a given PV (binary mean)
   svyprop_lt_mean_var <- function(var, des, cutoff = 226) {
     if (is.na(var) || is.null(var) || !nzchar(var)) return(c(NA_real_, NA_real_))
     if (!var %in% names(des$variables)) return(c(NA_real_, NA_real_))
@@ -52,7 +54,6 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
     c(as.numeric(coef(fit))[1], as.numeric(SE(fit))[1]^2)
   }
   
-  # Rubin's rules combiner for (mean, within-var) pairs across PVs
   rubin_combine <- function(mv_mat) {
     m1 <- mv_mat[1, ]
     v1 <- mv_mat[2, ]
@@ -74,7 +75,6 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
     rubin_combine(mv)
   }
   
-  # % in Levels 0/1 (score < 226); return percent only (no SE)
   pv_pct_lit01 <- function(des, pv_names, cutoff = 226) {
     if (is.null(pv_names) || length(pv_names) == 0 || all(is.na(pv_names))) {
       return(NA_real_)
@@ -95,6 +95,7 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
     )
   }
   
+  # --- Main Group Loop ---
   out <- vector("list", length(group_vars))
   names(out) <- paste0("g", seq_along(group_vars))
   
@@ -102,7 +103,6 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
     gname <- names(out)[i]
     v     <- group_vars[[i]]
     
-    # subset to v == 1 (and non-missing)
     take1 <- function(des) {
       if (!v %in% names(des$variables)) return(subset(des, FALSE))
       idx <- des$variables[[v]] == 1 & !is.na(des$variables[[v]])
@@ -112,9 +112,15 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
     des1_g <- take1(df1_rep)
     des2_g <- take1(df2_rep)
     
-    s1_ale <- svy_pct_yes("NFE12", des1_g)
-    s2_ale <- svy_pct_yes("NFE12", des2_g)
+    # 1. ALE Participation (NFE12 == 1)
+    s1_ale <- svy_pct_yes("NFE12", des1_g, yes_value = 1)
+    s2_ale <- svy_pct_yes("NFE12", des2_g, yes_value = 1)
     
+    # 2. Secondary Education (ed3 == 2 or 3)
+    s1_sec <- svy_pct_yes("ed3", des1_g, yes_value = c(2, 3))
+    s2_sec <- svy_pct_yes("ed3", des2_g, yes_value = c(2, 3))
+    
+    # 3. Literacy/Numeracy PVs
     s1 <- pv_stats_all(des1_g)
     s2 <- pv_stats_all(des2_g)
     
@@ -123,28 +129,31 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
       mean_lit_df1     = s1$mean_lit,  se_lit_df1   = s1$se_lit,
       mean_num_df1     = s1$mean_num,  se_num_df1   = s1$se_num,
       pct_lit01_df1    = s1$pct_lit01,
+      pct_ale_df1      = s1_ale,
+      pct_sec_df1      = s1_sec,
       mean_lit_df2     = s2$mean_lit,  se_lit_df2   = s2$se_lit,
       mean_num_df2     = s2$mean_num,  se_num_df2   = s2$se_num,
       pct_lit01_df2    = s2$pct_lit01,
-      pct_ale_df1      = s1_ale,
-      pct_ale_df2      = s2_ale
+      pct_ale_df2      = s2_ale,
+      pct_sec_df2      = s2_sec
     )
     
     if (assign_to_env) {
-      # literacy PV means/SEs
       if (!is.null(pvlit) && length(pvlit) > 0 && !all(is.na(pvlit))) {
         assign(paste0(gname, "_mean_lit_df1"),  s1$mean_lit,  envir = target_env)
         assign(paste0(gname, "_se_lit_df1"),    s1$se_lit,    envir = target_env)
         assign(paste0(gname, "_mean_lit_df2"),  s2$mean_lit,  envir = target_env)
         assign(paste0(gname, "_se_lit_df2"),    s2$se_lit,    envir = target_env)
-        # NEW.. % in Levels 0/1 (no SE)
         assign(paste0(gname, "_pct_lit01_df1"), s1$pct_lit01, envir = target_env)
         assign(paste0(gname, "_pct_lit01_df2"), s2$pct_lit01, envir = target_env)
-        # NEW - add NFE12
+        
+        # New Percentage Assignments
         assign(paste0(gname, "_pct_ale_df1"), s1_ale, envir = target_env)
         assign(paste0(gname, "_pct_ale_df2"), s2_ale, envir = target_env)
+        assign(paste0(gname, "_pct_sec_df1"), s1_sec, envir = target_env)
+        assign(paste0(gname, "_pct_sec_df2"), s2_sec, envir = target_env)
       }
-      # numeracy PV means/SEs
+      # ... [Numeracy block remains unchanged] ...
       if (!is.null(pvnum) && length(pvnum) > 0 && !all(is.na(pvnum))) {
         assign(paste0(gname, "_mean_num_df1"), s1$mean_num, envir = target_env)
         assign(paste0(gname, "_se_num_df1"),   s1$se_num,   envir = target_env)
@@ -153,6 +162,5 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
       }
     }
   }
-  
   invisible(out)
 }
