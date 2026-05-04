@@ -229,11 +229,14 @@ export_summs(
     "ALE x Children x Foreign-language x Foreign-born" = "NFE12_within:children_within:forlang_within:forborn_within",
     "ALE x Female x Children x Foreign-language x Foreign-born" = "NFE12_within:female_within:children_within:forlang_within:forborn_within"
   ),
+    statistics = "all", 
+  error_pos = "right", 
+  error_format = "({std.error})", 
   to.file = "docx",
-  file.name = here("Results", "Table_S3_ed1.docx")
+  file.name = here("Results", "TS1_ed2.docx")
 )
 
-include_graphics(here("Results", "Table_S3_ed1.docx"))
+include_graphics(here("Results", "TS1_ed2.docx"))
 ```
 
 #### Predictions
@@ -719,11 +722,14 @@ export_summs(
     "ALE x Children x Foreign-language x Foreign-born" = "NFE12_within:children_within:forlang_within:forborn_within",
     "ALE x Female x Children x Foreign-language x Foreign-born" = "NFE12_within:female_within:children_within:forlang_within:forborn_within"
   ),
+      statistics = "all", 
+  error_pos = "right", 
+  error_format = "({std.error})", 
   to.file = "docx",
-  file.name = here("Results", "Table_S3_ed1.docx")
+  file.name = here("Results", "TS1_ed3.docx")
 )
 
-include_graphics(here("Results", "Table_S3_ed1.docx"))
+include_graphics(here("Results", "TS1_ed3.docx"))
 ```
 
 #### Predictions

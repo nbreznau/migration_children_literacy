@@ -50,14 +50,14 @@ pacman::p_load(packages, character.only = T)
 ```{r }
 
 
-df <- read_rds(here("Data", "df.RDS")) 
+#df <- read_rds(here("Data", "df.RDS")) 
 df2 <- read_rds(here("Data", "df2.RDS")) 
 
 ```
 
 ## Regressions
 
-### Table 1. OLS
+### Table A2. OLS
 
 
 ```{r}
@@ -92,7 +92,7 @@ export_summs(
   ),
   statistics = c("N" = "nobs", "r2" = "r.squared", "AIC" = "AIC", "BIC" = "BIC"),
   to.file = "docx",
-  file.name = here("Results", "Reg_Table_1.docx")
+  file.name = here("Results", "TA2.docx")
 )
 
 ```
@@ -118,7 +118,7 @@ testp3 <- cor.test(df_clean$aweight, df_clean$resid_clean)$p.value
 
 Correlations are `r round(testcor1,3)`, `r round(testcor2,3)`, & `r round(testcor3,3)`. With p-values `r round(testp1,4)`, `r round(testp2,4)`, & `r round(testp3,4)`. This suggests that there is no need to weight the sample. We are essentially controlling for the variables that lead to selection.
 
-### Table 2. GLM/Multilevel
+### Table A3. GLM/Multilevel
 
 #### Recodes
 
@@ -312,7 +312,7 @@ export_summs(
   M2.1, M2.2, M2.3a, M2.3b, M2.4,
   #model.names = c("Foreign-born", "Native-born", "Pooled", "Pooled with ALE interaction"),
   to.file = "docx",
-  file.name = here("Results", "Reg_Table_2.docx"
+  file.name = here("Results", "TA3.docx"
 ))
 
 ```
@@ -356,7 +356,7 @@ ggplot(test_nousa, aes(gdp, lit)) +
 
 ### ATEs
 
-### Table S2. Interactive GLM
+### Table A4. Interactive GLM
 
 Here we interact all intersectional variables of interest with ALE (NFE12) to see the unique effects if any.
 
@@ -431,11 +431,14 @@ export_summs(
     "ALE x Children x Foreign-language x Foreign-born" = "NFE12_within:children_within:forlang_within:forborn_within",
     "ALE x Female x Children x Foreign-language x Foreign-born" = "NFE12_within:female_within:children_within:forlang_within:forborn_within"
   ),
+  statistics = "all", 
+  error_pos = "right", 
+  error_format = "({std.error})", # Formats the S.E. column (e.g., with parentheses)
   to.file = "docx",
-  file.name = here("Results", "Table_S3.docx")
+  file.name = here("Results", "TA4.docx")
 )
 
-include_graphics(here("Results", "Table_S3.docx"))
+include_graphics(here("Results", "TA4.docx"))
 ```
 #### Predictions
 
@@ -675,7 +678,7 @@ dev.off()
 
 include_graphics(here("Results", "Fig1.png"))
 ```
-### Fig 1. New Label
+### Fig 2. ATEs, circle labels
 
 
 ```{r}

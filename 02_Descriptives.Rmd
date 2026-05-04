@@ -1,21 +1,23 @@
 ---
 title: "02 Descriptives"
+subtitle: "The ‘Immigration Issue’ Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy in Upper- and Middle-Income Countries"
 author: "Nate Breznau"
 output:
-  word_document:
-    toc: true
-    toc_depth: '1'
   html_document:
     toc: true
     toc_float: true
     number_sections: true
-    toc_depth: 1
+    toc_depth: '3'
   pdf_document:
     toc: true
-    toc_depth: '1'
+    toc_depth: '3'
 ---
 
-NOTE: Linking error is necessary to compare SE across cycles. Not doing that here, but take heed!
+Data prepared for this stage in 01_Data_Setup.Rmd. Except for Table A1, which brings in 
+
+The first cycle of PIAAC is included to demonstrate change in literacy across countries. 
+
+Many functions are stored in the /Sub folder and called in this workflow.
 
 ## Setup   
 
@@ -125,7 +127,8 @@ source(here("Sub", "IRT_helper_groups_se_pop.R"))
 Run the routine country_loop.R once and then simply load the results thereafter as the saved object plot_df.RData
 
 ```{r}
-# this is the basic version, it does not calculate Rubin/Little SEs
+
+# Basic version
 
 source(here("Sub", "IRT_helper_groups.R"))
 
@@ -163,7 +166,7 @@ include_graphics(here("Results", "Fig1A.png"))
 ```
 
 
-## Tbl A1. Immigration Increases 1990-2024
+## Tbl S1. Immigration Increases 1990-2024
 
 UN. 2024. “Total Number of Emigrants: People That Were Born in a Country and Now Live in Another Country” [CSV]. Our World In Data: United Nations Department of Economic and Social Affairs. https://ourworldindata.org/migration.
 
@@ -177,7 +180,7 @@ Files downloaded 2025/12/05
 df_un_mig <- read_csv(here("Data", "total-number-of-emigrants.filtered", "total-number-of-emigrants.csv"))
 
 df_un_fb <- read_csv(here("Data", "migrant-stock-share.filtered", "migrant-stock-share.csv")) %>%
-  subset(Year == 2024)
+  subset(Year %in% c(1990, 2024))
 
 continents <- c("Africa","Asia","Europe","North America","Oceania","South America")
 
@@ -217,27 +220,38 @@ df_2A <- df_2A %>%
   mutate(pct_emig_2024 = round(100*(emigrants_2024/population_2024),1))
 
 df_2A <- df_2A %>%
-  mutate(pct_fb_2024 = case_when(Entity == "Africa" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Africa"],
-                                 Entity == "Asia" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Asia"],
-                                 Entity == "Europe" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Western Europe (UN)"],
-                                 Entity == "North America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "North America"],
-                                 Entity == "Oceania" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Oceania"],
-                                 Entity == "South America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "South America"],
-                                 Entity == "World" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "World"]),
-         pct_fb_2024 = round(pct_fb_2024, 1)
+  mutate(pct_fb_2024 = case_when(Entity == "Africa" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Africa" & df_un_fb$Year == 2024],
+                                 Entity == "Asia" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Asia" & df_un_fb$Year == 2024],
+                                 Entity == "Europe" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Western Europe (UN)" & df_un_fb$Year == 2024],
+                                 Entity == "North America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "North America" & df_un_fb$Year == 2024],
+                                 Entity == "Oceania" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Oceania" & df_un_fb$Year == 2024],
+                                 Entity == "South America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "South America" & df_un_fb$Year == 2024],
+                                 Entity == "World" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "World" & df_un_fb$Year == 2024]),
+         pct_fb_2024 = round(pct_fb_2024, 1),
+         pct_fb_1990 = case_when(Entity == "Africa" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Africa" & df_un_fb$Year == 1990],
+                                 Entity == "Asia" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Asia" & df_un_fb$Year == 1990],
+                                 Entity == "Europe" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Western Europe (UN)" & df_un_fb$Year == 1990],
+                                 Entity == "North America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "North America" & df_un_fb$Year == 1990],
+                                 Entity == "Oceania" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "Oceania" & df_un_fb$Year == 1990],
+                                 Entity == "South America" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "South America" & df_un_fb$Year == 1990],
+                                 Entity == "World" ~ df_un_fb$`Share of the population that was born in another country`[df_un_fb$Entity == "World" & df_un_fb$Year == 1990]),
+         pct_fb_1990 = round(pct_fb_1990, 1),
   )
 
-rm(df_un_mig, df_emig_out, df_pop_2024, df_un_fb)
+
+
 
 write.csv(df_2A, here("Results", "TS2.csv"), row.names = FALSE)
 
+kable(df_2A)
 rm(df_2A)
+rm(df_un_mig, df_emig_out, df_pop_2024, df_un_fb)
 
 ```
 
-## Table S1. Descriptives
+## Table A1. Descriptives
 
-Drop cases of those still in formal education. Add footnote to table that `r sum(df2$ed_currently == 1, na.rm = T)`.
+
 
 ### All
 
@@ -311,12 +325,15 @@ table_1outa  %>% kable("html", digits = 2, caption = "Descriptive Statistics") %
 
 write.csv(
   table_1outa,
-  file = here("Results", "TS1.csv"),
+  file = here("Results", "TA1.csv"),
   row.names = FALSE
 )
 
 
 ```
+
+
+Drop cases of those still in formal education `r sum(df2$ed_currently == 1, na.rm = T)` and do listwise deletion leaving `r length(table_1_all$skill_reading) - sum(table_1_all$missing, na.rm = T)` cases for analysis. This is a `r (1-(length(table_1_all$skill_reading) - sum(table_1_all$missing, na.rm = T))/length(df2$ed_currently[df2$ed_currently != 1]))*100` percent reduction.
 
 ### Women
 
@@ -549,7 +566,7 @@ table_output
 
 ```
 
-## Fig A2. Intersectionality of Literacy
+## Fig 1. Intersectionality of Literacy
 
 ### Define all groups
 
@@ -1084,9 +1101,8 @@ edges_de <- edges_de %>%
          x = x * x_sclr)
 
 ```
+
 #### A. All
-
-
 
 
 ```{r}
@@ -1136,7 +1152,7 @@ p <- ggplot(df_a2, aes(x = x, y = y)) +
     linewidth = 3.5, lineend = "round"
   ) +
   
-  # === PETAL LABELS (DATA) === 
+  # PETAL LABELS
   geom_text(aes(x = x, y = y - ry - 0.1, label = round(mean, 0)), vjust = 0, hjust = 0.5, size = 2.2, color = "black") +
   geom_text(aes(x = x + rx * 0.866 + 0.3, y = y + ry * 0.5 + 0.05, label = paste0("  ", round(pct_ale, 0), c("%", rep("", 30)))), hjust = 0, vjust = 0.5, size = 2.2, color = "black") +
   geom_text(aes(x = x - rx * 0.866 - 0.3, y = y + ry * 0.5 + 0.05, label = paste0(round(pct_sec, 0), c("% ", rep("  ", 30)))), hjust = 1, vjust = 0.5, size = 2.2, color = "black") +
@@ -1149,10 +1165,10 @@ p <- ggplot(df_a2, aes(x = x, y = y)) +
   annotate("segment", x = leg_x, xend = leg_x, y = leg_y, yend = leg_y - ry, linewidth = 3.5, color = "grey60", lineend = "round") +
   annotate("segment", x = leg_x, xend = leg_x + rx * 0.866, y = leg_y, yend = leg_y + ry * 0.7, linewidth = 3.5, color = "grey60", lineend = "round") +
   annotate("segment", x = leg_x, xend = leg_x - rx * 0.866, y = leg_y, yend = leg_y + ry * 0.7, linewidth = 3.5, color = "grey60", lineend = "round") +
-  # Line-break Text Labels for the Key (\n creates the new line)
+  # Line-break Text Labels 
   annotate("text", x = leg_x, y = leg_y - ry - 0.15, label = "Literacy\n(Avg.)", vjust = 0, hjust = 0.5, size = 2.2, color = "black") +
   annotate("text", x = leg_x + rx * 0.866 + 4.5, y = leg_y + ry * 0.5 + 0.05, label = "ALE partici-\npation (%)", hjust = 0.5, vjust = 0.5, size = 2.2, color = "black") +
-  annotate("text", x = leg_x - rx * 0.866 - 4.5, y = leg_y + ry * 0.5 + 0.05, label = "Secondary ed\ncompletion (%)", hjust = 0.5, vjust = 0.5, size = 2.2, color = "black") +
+  annotate("text", x = leg_x - rx * 0.866 - 4.5, y = leg_y + ry * 0.5 + 0.05, label = "Tertiary\ncompletion (%)", hjust = 0.5, vjust = 0.5, size = 2.2, color = "black") +
   
   # Top right legend
   # connected rectangles gradient bar
@@ -1587,7 +1603,7 @@ table_16_out <- table_16_groups %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
 
 
-save_kable(table_16_out, file = here::here("Results", "Table_S2.html"))
+save_kable(table_16_out, file = here::here("Results", "TS3.html"))
 
 table_16_out
 ```

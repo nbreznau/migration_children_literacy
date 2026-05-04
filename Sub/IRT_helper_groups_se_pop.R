@@ -116,9 +116,9 @@ calc_groups_pv <- function(df1_rep, df2_rep, pvlit, pvnum, group_vars,
     s1_ale <- svy_pct_yes("NFE12", des1_g, yes_value = 1)
     s2_ale <- svy_pct_yes("NFE12", des2_g, yes_value = 1)
     
-    # 2. Secondary Education (ed3 == 2 or 3)
-    s1_sec <- svy_pct_yes("ed3", des1_g, yes_value = c(2, 3))
-    s2_sec <- svy_pct_yes("ed3", des2_g, yes_value = c(2, 3))
+    # 2. Tertiary Education (ed3 == 3) (was formerly secondary but changed as it fits the storyline better)
+    s1_sec <- svy_pct_yes("ed3", des1_g, yes_value = 3)
+    s2_sec <- svy_pct_yes("ed3", des2_g, yes_value = 3)
     
     # 3. Literacy/Numeracy PVs
     s1 <- pv_stats_all(des1_g)

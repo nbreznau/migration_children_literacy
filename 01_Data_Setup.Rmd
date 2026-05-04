@@ -1,7 +1,7 @@
 ---
-title: "Parenthood, Immigration and Further Education"
-subtitle: "Data Cleaning/Prep"
-author: "Nate Breznau, Johannes Bonnes and Sylvia Rahn"
+title: "01 Data Setup"
+subtitle: "The ‘Immigration Issue’ Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy in Upper- and Middle-Income Countries"
+author: "Nate Breznau"
 output:
   word_document:
     toc: true
@@ -16,7 +16,7 @@ output:
     toc_depth: '1'
 ---
 
-This code is setup up to investigate Cycle 1 for Fig 1, but we use only Cycle 2 here. 
+This code is setup up to investigate Cycle 1 for Fig 1, but I use only Cycle 2 for the analysis. The ALE question is not identical and its not a study that probes a longitudinal question.  
 
 ## Setup   
 
