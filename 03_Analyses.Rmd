@@ -211,6 +211,9 @@ country_between_scaled <- function(dat, between_vars, suffix = "_z") {
 df2_sub <- df2_sub %>%
   left_join(country_between_scaled(df2_sub, between_vars), by = "iso3c")
 
+# save for re-use in 04_
+write_rds(df2_sub, here("Data", "df2_sub.RDS"))
+
 df2_imm <- df2_imm %>%
   left_join(country_between_scaled(df2_imm, between_vars), by = "iso3c") 
 
@@ -435,6 +438,9 @@ export_summs(
 )
 
 include_graphics(here("Results", "TA4.docx"))
+
+# for 3-digit r-squared
+#summ(m4, digits = 3)
 ```
 
 #### Predictions

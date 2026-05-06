@@ -45,10 +45,13 @@ pacman::p_load(packages, character.only = T)
 
 ## Data
 
+This only works after 03_Analyses.Rmd has been run, which saves the file df2_sub.rds
+
+
 ```{r }
 
 df2 <- read_rds(here("Data", "df2.RDS")) 
-
+df2_sub <- read_rds(here("Data", "df2_sub.rds"))
 ```
 
 
@@ -56,63 +59,11 @@ df2 <- read_rds(here("Data", "df2.RDS"))
 
 Disclosure: I first tried running with completed primary only (ed3 == 1) as the intercategory, but the case numbers were too small for some of the categories and prediction was unstable. Then I switched to completed secondary versus completed tertiary.
 
-### Data Prep & Centering
+### The GLM 5-way
 
 ```{r}
 
-# Create education dummies and filter full valid sample
-df2_sub <- df2 %>%
-  mutate(
-    ed3_secondary = as.integer(ed3 == 2 | ed3 == 1),
-    ed3_tertiary  = as.integer(ed3 == 3)
-  ) %>%
-  subset(ed_currently != 1)
-
-# Within/Between decomposition for the FULL sample
-df2_sub <- df2_sub %>%
-  group_by(iso3c) %>%
-  mutate(
-    male = ifelse(female == 1, 0, 1),
-    NFE12_between = sum(SPFWT0 * NFE12, na.rm = TRUE) / sum(SPFWT0[!is.na(NFE12)], na.rm = TRUE),
-    female_between = sum(SPFWT0 * female, na.rm = TRUE) / sum(SPFWT0[!is.na(female)], na.rm = TRUE),
-    male_between = sum(SPFWT0 * male, na.rm = T) / sum(SPFWT0[!is.na(male)], na.rm = TRUE),
-    children_between = sum(SPFWT0 * children, na.rm = TRUE) / sum(SPFWT0[!is.na(children)], na.rm = TRUE),
-    ed3_secondary_between = sum(SPFWT0 * ed3_secondary, na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_secondary)], na.rm = TRUE),
-    ed3_tertiary_between  = sum(SPFWT0 * ed3_tertiary,  na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_tertiary)],  na.rm = TRUE),
-    forborn_between = sum(SPFWT0 * FORBORN, na.rm = TRUE) / sum(SPFWT0[!is.na(FORBORN)], na.rm = TRUE),
-    forlang_between = sum(SPFWT0 * FORLANG, na.rm = TRUE) / sum(SPFWT0[!is.na(FORLANG)], na.rm = TRUE),
-
-    NFE12_within = NFE12 - NFE12_between,
-    children_within = children - children_between,
-    female_within = female - female_between,
-    ed3_secondary_within = ed3_secondary - ed3_secondary_between,
-    ed3_tertiary_within = ed3_tertiary - ed3_tertiary_between,
-    forborn_within = FORBORN - forborn_between,
-    forlang_within = FORLANG - forlang_between
-  ) %>%
-  ungroup()
-
-# Build country-level z-scored between effects
-between_vars <- c("NFE12_between", "female_between", "children_between", 
-                  "ed3_secondary_between", "ed3_tertiary_between", 
-                  "forborn_between", "forlang_between")
-
-country_between_scaled <- function(dat, between_vars, suffix = "_z") {
-  dat %>%
-    distinct(iso3c, across(all_of(between_vars))) %>%
-    mutate(across(all_of(between_vars), ~{
-        m <- mean(.x, na.rm = TRUE)
-        s <- sd(.x, na.rm = TRUE)
-        if (is.na(s) || s == 0) NA_real_ else as.numeric((.x - m) / s)
-      }, .names = paste0("{.col}", suffix))) %>%
-    select(iso3c, ends_with(suffix))
-}
-
-df2_sub <- df2_sub %>% left_join(country_between_scaled(df2_sub, between_vars), by = "iso3c")
-
-### The Single Pooled GLM
-
-m4_pooled <- lmer(
+m5 <- lmer(
   skill_reading ~ 
     # Base fixed effects
     NFE12_within + NFE12_between_z +
@@ -120,7 +71,8 @@ m4_pooled <- lmer(
     children_within + children_between_z +
     forlang_within + forlang_between_z +
     forborn_within + forborn_between_z +
-    #ed3_secondary_within + ed3_secondary_between_z + # this can't be in the model because of collinearity
+    #collinearity problem?
+    ed3_secondary_within + ed3_secondary_between_z + 
     ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc_k_log +
     #Intercategorical approach
@@ -129,9 +81,14 @@ m4_pooled <- lmer(
   data = df2_sub
 )
 
+
+
 # Export summary 
-export_summs(m4_pooled, statistics = "all", error_pos = "right", error_format = "({std.error})", 
+export_summs(m5, statistics = "all", error_pos = "right", error_format = "({std.error})", 
              to.file = "docx", file.name = here("Results", "TS1.docx"))
+
+# 3-digit r-squared
+# summ(m5, digits = 3)
 
 ```
 
@@ -171,8 +128,8 @@ calc_ate <- function(is_female, is_forborn, is_child, is_forlang, is_tertiary) {
   df_0 <- base_df %>% mutate(NFE12_within = 0 - gm_nfe12)
   df_1 <- base_df %>% mutate(NFE12_within = 1 - gm_nfe12)
   
-  pred0 <- predict(m4_pooled, newdata = df_0, re.form = NA)
-  pred1 <- predict(m4_pooled, newdata = df_1, re.form = NA)
+  pred0 <- predict(m5, newdata = df_0, re.form = NA)
+  pred1 <- predict(m5, newdata = df_1, re.form = NA)
   
   tt <- t.test(pred1, pred0, paired = FALSE)
   
@@ -398,7 +355,7 @@ calc_country_gains <- function(df2_full, spec, AME, ctx_data, weight_var="aweigh
 
 ```{r}
 # Context Effects (m5) from the Pooled Model
-df2r$m4_baseline_pred <- predict(m4_pooled, re.form = NA)
+df2r$m4_baseline_pred <- predict(m5, re.form = NA)
 m5_pooled <- lmer(skill_reading ~ 0 + offset(m4_baseline_pred) + (1 + NFE12_within | iso3c), data = df2r)
 
 ctx_df <- ranef(m5_pooled)$iso3c %>% 
@@ -473,7 +430,7 @@ in_group <- function(df, spec) {
 precomp_combined <- pmap_dfr(spec_grid, function(female, FORBORN, FORLANG, children, ed3_tertiary, spec_id) {
   spec <- list(female = female, FORBORN = FORBORN, FORLANG = FORLANG, children = children, ed3_tertiary = ed3_tertiary)
   
-  ame <- calc_ame_pooled(m4_pooled, df2r, spec)
+  ame <- calc_ame_pooled(m5, df2r, spec)
   cg  <- calc_country_gains(df2_sub, spec, AME = ame$AME, ctx_data = ctx_df, weight_var = "aweight")
   
   cg$spec_id <- spec_id
