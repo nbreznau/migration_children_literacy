@@ -1,7 +1,7 @@
 ---
 title: "01 Data Setup"
 subtitle: "The ‘Immigration Issue’ Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy in Upper- and Middle-Income Countries"
-author: "Nate Breznau"
+author: "Blind Peer Review Version"
 output:
   word_document:
     toc: true
@@ -16,13 +16,15 @@ output:
     toc_depth: '1'
 ---
 
+PIAAC PUF Files accessed from https://www.oecd.org/skills/piaac/data/ in June 2024.
+
 This code is setup up to investigate Cycle 1 for Fig 1, but I use only Cycle 2 for the analysis. The ALE question is not identical and its not a study that probes a longitudinal question.  
 
 ## Setup   
 
-```{r setup, echo = F, warning = F, message = F}
+```{r setup, warning = F, message = F}
 
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 packages <- c('tidyverse',
               'readr',
@@ -38,11 +40,13 @@ pacman::p_load(packages, character.only = T)
 
 ## Data
 
-These data were combined from the PUFs of PIAAC using the routines in
+These data were combined from the PUFs of PIAAC using routines built by the author.
 
-https://github.com/nbreznau/ALE_degrees_institutions
+They can be found in a companion Github repository
 
-```{r data}
+URL Omitted for blind peer review
+
+```{r}
 
 df <- read_csv(here("Data", "piaac_combined.csv"))
 df2 <- read_csv(here("Data", "piaac_combined_2.csv"))
@@ -54,7 +58,7 @@ df2 <- read_csv(here("Data", "piaac_combined_2.csv"))
 
 #### Cycle 1
 
-```{r, warning = F}
+```{r }
 df <- df %>%
    # subset(PAIDWORK12 == 1 | !C_Q07 %in% c(4, 5, 7, 8, 97) | NFE12JR == 5)  %>%
    mutate(iso3c = countrycode(as.numeric(CNTRYID), "iso3n", "iso3c"),
@@ -134,7 +138,7 @@ df <- df %>%
 ```
 
 
-```{r, warning = F}
+```{r }
 # create intersectionalities
  df <- df %>%
    mutate(male_not = case_when(male == 1 & FORBORN == 0 ~ 1,
@@ -323,7 +327,7 @@ c('My skills are higher than required by my job' = 1,
 'My skills are matched to what is required by my job' = 2, 
 'Some of my skills are lower than what is required by my job and need to be further developed' = 3)
 
-```{r data}
+```{r }
 df2 <- df2 %>%
   mutate(
     iso3c = countrycode(as.numeric(CNTRYID), "iso3n", "iso3c"),
@@ -578,7 +582,7 @@ df2 <- df2 %>%
 
 https://dataverse.nl/dataset.xhtml?persistentId=doi:10.34894/INZBF2
 
-```{r gdp}
+```{r }
 #get all countries
 clist <- unique(df2$iso3c)
 

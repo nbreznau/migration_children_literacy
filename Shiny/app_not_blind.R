@@ -1,8 +1,3 @@
-library(shiny)
-library(tidyverse)
-library(ggrepel)
-library(scales)
-
 # new, precomputed values (solves RAM problem on shinyapps.io)
 precomp <- readRDS("precomp_spec_country.rds")
 spec_grid <- readRDS("precomp_spec_grid.rds")
@@ -91,17 +86,18 @@ ui <- fluidPage(
       
       tags$div(
         style = "font-size: 12px; line-height: 1.3;",
-        tags$b("Author Blinded for Peer Review"), tags$br(),
-        HTML('contact: blinded'), tags$br(),
+        tags$b("Nate Breznau"), tags$br(),
+        HTML('contact: <a href="mailto:breznau.nate@gmail.com">email</a>'), tags$br(),
         "CC BY 4.0", tags$br(),
-        HTML('citation: blinded (do not share without permission)')
+        HTML('citation: <a href="https://github.com/nbreznau/migration_children_literacy" target="_blank">GitHub</a>')
       ),
+      
       
       hr(),
       
       tags$div(
         style = "position: absolute; bottom: 10px; left: 10px;",
-        #tags$img(src = "die.png", style = "width: 200px; height: auto;")
+        tags$img(src = "die.png", style = "width: 200px; height: auto;")
       )
     ),
     

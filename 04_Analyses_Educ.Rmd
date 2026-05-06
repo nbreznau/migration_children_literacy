@@ -1,0 +1,511 @@
+---
+title: "04 Main Analyses + Education"
+subtitle: "The ‘Immigration Issue’ Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy in Upper- and Middle-Income Countries"
+author: "Author Omitted for Blind Peer Review"
+output:
+  word_document:
+    toc: true
+    toc_depth: '1'
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    toc_depth: 1
+---
+
+
+## Setup   
+
+```{r setup, warning = F, message = F}
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+packages <- c('tidyverse',
+              'readr',
+              'knitr',
+              'here',
+              'ggplot2',
+              'ggrepel',
+              'ragg',
+              'kableExtra',
+              'countrycode',
+              'readxl',
+              'jtools',
+              'lme4',
+              'lmerTest',
+              'broom.mixed',
+              'viridis',
+              'survey',
+              'ggpubr',
+              'purrr')
+
+pacman::p_load(packages, character.only = T)
+
+```
+
+## Data
+
+```{r }
+
+df2 <- read_rds(here("Data", "df2.RDS")) 
+
+```
+
+
+## Table A5. GLM/Multilevel
+
+Disclosure: I first tried running with completed primary only (ed3 == 1) as the intercategory, but the case numbers were too small for some of the categories and prediction was unstable. Then I switched to completed secondary versus completed tertiary.
+
+### Data Prep & Centering
+
+```{r}
+
+# Create education dummies and filter full valid sample
+df2_sub <- df2 %>%
+  mutate(
+    ed3_secondary = as.integer(ed3 == 2 | ed3 == 1),
+    ed3_tertiary  = as.integer(ed3 == 3)
+  ) %>%
+  subset(ed_currently != 1)
+
+# Within/Between decomposition for the FULL sample
+df2_sub <- df2_sub %>%
+  group_by(iso3c) %>%
+  mutate(
+    male = ifelse(female == 1, 0, 1),
+    NFE12_between = sum(SPFWT0 * NFE12, na.rm = TRUE) / sum(SPFWT0[!is.na(NFE12)], na.rm = TRUE),
+    female_between = sum(SPFWT0 * female, na.rm = TRUE) / sum(SPFWT0[!is.na(female)], na.rm = TRUE),
+    male_between = sum(SPFWT0 * male, na.rm = T) / sum(SPFWT0[!is.na(male)], na.rm = TRUE),
+    children_between = sum(SPFWT0 * children, na.rm = TRUE) / sum(SPFWT0[!is.na(children)], na.rm = TRUE),
+    ed3_secondary_between = sum(SPFWT0 * ed3_secondary, na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_secondary)], na.rm = TRUE),
+    ed3_tertiary_between  = sum(SPFWT0 * ed3_tertiary,  na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_tertiary)],  na.rm = TRUE),
+    forborn_between = sum(SPFWT0 * FORBORN, na.rm = TRUE) / sum(SPFWT0[!is.na(FORBORN)], na.rm = TRUE),
+    forlang_between = sum(SPFWT0 * FORLANG, na.rm = TRUE) / sum(SPFWT0[!is.na(FORLANG)], na.rm = TRUE),
+
+    NFE12_within = NFE12 - NFE12_between,
+    children_within = children - children_between,
+    female_within = female - female_between,
+    ed3_secondary_within = ed3_secondary - ed3_secondary_between,
+    ed3_tertiary_within = ed3_tertiary - ed3_tertiary_between,
+    forborn_within = FORBORN - forborn_between,
+    forlang_within = FORLANG - forlang_between
+  ) %>%
+  ungroup()
+
+# Build country-level z-scored between effects
+between_vars <- c("NFE12_between", "female_between", "children_between", 
+                  "ed3_secondary_between", "ed3_tertiary_between", 
+                  "forborn_between", "forlang_between")
+
+country_between_scaled <- function(dat, between_vars, suffix = "_z") {
+  dat %>%
+    distinct(iso3c, across(all_of(between_vars))) %>%
+    mutate(across(all_of(between_vars), ~{
+        m <- mean(.x, na.rm = TRUE)
+        s <- sd(.x, na.rm = TRUE)
+        if (is.na(s) || s == 0) NA_real_ else as.numeric((.x - m) / s)
+      }, .names = paste0("{.col}", suffix))) %>%
+    select(iso3c, ends_with(suffix))
+}
+
+df2_sub <- df2_sub %>% left_join(country_between_scaled(df2_sub, between_vars), by = "iso3c")
+
+### The Single Pooled GLM
+
+m4_pooled <- lmer(
+  skill_reading ~ 
+    # Base fixed effects
+    NFE12_within + NFE12_between_z +
+    female_within + female_between_z + 
+    children_within + children_between_z +
+    forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z + # this can't be in the model because of collinearity
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    gdppc_k_log +
+    #Intercategorical approach
+    female_within * forborn_within * children_within * forlang_within * NFE12_within * ed3_tertiary_within +
+    (1 | iso3c),
+  data = df2_sub
+)
+
+# Export summary 
+export_summs(m4_pooled, statistics = "all", error_pos = "right", error_format = "({std.error})", 
+             to.file = "docx", file.name = here("Results", "TS1.docx"))
+
+```
+
+### Predicted ATEs
+
+
+```{r}
+# Filter for complete cases for prediction baseline
+df2r <- subset(df2_sub, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & 
+                 !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & 
+                 !is.na(gdppc) & !is.na(skill_reading))
+
+# Grand means for recentering predictions
+gm_female <- mean(df2r$female_between, na.rm = TRUE)
+gm_forborn <- mean(df2r$forborn_between, na.rm = TRUE)
+gm_children <- mean(df2r$children_between, na.rm = TRUE)
+gm_forlang <- mean(df2r$forlang_between, na.rm = TRUE)
+gm_nfe12 <- mean(df2r$NFE12_between, na.rm = TRUE)
+gm_ed3_sec <- mean(df2r$ed3_secondary_between, na.rm = TRUE)
+gm_ed3_tert <- mean(df2r$ed3_tertiary_between, na.rm = TRUE)
+
+# Function to calculate ATE for a specific profile
+calc_ate <- function(is_female, is_forborn, is_child, is_forlang, is_tertiary) {
+  
+  # Set secondary to 1 to predict the non-tertiary reference group
+  is_secondary <- ifelse(is_tertiary == 1, 0, 1)
+  
+  base_df <- df2r %>% mutate(
+    female_within = is_female - gm_female,
+    forborn_within = is_forborn - gm_forborn,
+    children_within = is_child - gm_children,
+    forlang_within = is_forlang - gm_forlang,
+    ed3_tertiary_within = is_tertiary - gm_ed3_tert,
+    ed3_secondary_within = is_secondary - gm_ed3_sec
+  )
+  
+  df_0 <- base_df %>% mutate(NFE12_within = 0 - gm_nfe12)
+  df_1 <- base_df %>% mutate(NFE12_within = 1 - gm_nfe12)
+  
+  pred0 <- predict(m4_pooled, newdata = df_0, re.form = NA)
+  pred1 <- predict(m4_pooled, newdata = df_1, re.form = NA)
+  
+  tt <- t.test(pred1, pred0, paired = FALSE)
+  
+  tibble(
+    AME = mean(pred1 - pred0),
+    lower = tt$conf.int[1],
+    upper = tt$conf.int[2]
+  )
+}
+
+# Define the 12 Intersectional Profiles
+profiles <- tribble(
+  ~type_id, ~type_label, ~is_female, ~is_forborn, ~is_child, ~is_forlang,
+  "1f", "1f. Foreign-born mother\nnon-native speaker", 1, 1, 1, 1,
+  "2f", "2f. Foreign-born no children female\nnon-native speaker", 1, 1, 0, 1,
+  "3f", "3f. Foreign-born mother\nnative speaker", 1, 1, 1, 0,
+  "4f", "4f. Foreign-born no children female\nnative speaker", 1, 1, 0, 0,
+  "5f", "5f. Native-born mother\nnative speaker", 1, 0, 1, 0,
+  "6f", "6f. Native-born no children female\nnative speaker", 1, 0, 0, 0,
+  
+  "1m", "1m. Foreign-born father\nnon-native speaker", 0, 1, 1, 1,
+  "2m", "2m. Foreign-born no children male\nnon-native speaker", 0, 1, 0, 1,
+  "3m", "3m. Foreign-born father\nnative speaker", 0, 1, 1, 0,
+  "4m", "4m. Foreign-born no children male\nnative speaker", 0, 1, 0, 0,
+  "5m", "5m. Native-born father\nnative speaker", 0, 0, 1, 0,
+  "6m", "6m. Native-born no children male\nnative speaker", 0, 0, 0, 0
+)
+
+# Cross profiles with education levels and calculate ATEs
+ame_all <- crossing(
+  profiles,
+  is_tertiary = c(0, 1)
+) %>%
+  mutate(
+    res = pmap(list(is_female, is_forborn, is_child, is_forlang, is_tertiary), calc_ate)
+  ) %>%
+  unnest(res)
+
+```
+
+### Prepare Data for Plotting
+
+
+```{r}
+ame_all <- ame_all %>%
+  mutate(
+    ed_label = ifelse(is_tertiary == 1, "Tertiary", "Non-Tertiary"),
+    idx = as.integer(substr(type_id, 1, 1)),
+    sex = substr(type_id, 2, 2)
+  )
+
+# Set factor order identical to original layout
+type_order <- ame_all %>% distinct(type_label, idx, sex) %>% arrange(idx, sex) %>% pull(type_label)
+ame_all$type_label <- factor(ame_all$type_label, levels = rev(type_order))
+
+# Add binary dot indicators
+ame_all <- ame_all %>%
+  mutate(
+    Female = ifelse(sex == "f", 1, 0),
+    `Foreign-born` = ifelse(is_forborn == 1, 1, 0),
+    `Non-native-speaker` = ifelse(is_forlang == 1, 1, 0),
+    Parent = ifelse(is_child == 1, 1, 0)
+  )
+
+pal12 <- viridis(n = nlevels(ame_all$type_label), option = "D", begin = 0.1, end = 0.9)
+```
+
+### Generate Main Plots' Components
+
+```{r}
+
+
+dot_df <- ame_all %>%
+  filter(is_tertiary == 0) %>% # Only need one set of dots for the labels
+  select(type_label, Female, `Foreign-born`, `Non-native-speaker`, Parent) %>%
+  pivot_longer(cols = c(Female, `Foreign-born`, `Non-native-speaker`, Parent), names_to = "variable", values_to = "value") %>%
+  mutate(variable = factor(variable, levels = c("Female", "Foreign-born", "Non-native-speaker", "Parent")))
+
+p_dots <- ggplot(dot_df, aes(x = variable, y = type_label)) +
+  geom_point(data = subset(dot_df, value == 0), shape = 21, size = 3.2, stroke = 0.5, fill = "white", color = "black") +
+  geom_point(data = subset(dot_df, value == 1), shape = 16, size = 3.2, color = "black") +
+  labs(x = NULL, y = NULL) + theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+
+# Non-Tertiary Plot
+p_bar <- ggplot(subset(ame_all, is_tertiary == 0), aes(x = type_label, y = AME, fill = type_label)) +
+  geom_col(width = 0.55, color = "black") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +
+  scale_y_continuous(breaks = seq(-10, 40, by = 5)) +
+  coord_flip(ylim = c(-1, 35)) + 
+  labs(x = NULL, y = "Non-Tertiary\nEducation") + theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(), legend.position = "none")
+
+# Tertiary Plot
+p_bar_t <- ggplot(subset(ame_all, is_tertiary == 1), aes(x = type_label, y = AME, fill = type_label)) +
+  geom_col(width = 0.55, color = "black") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +
+  scale_y_continuous(breaks = seq(-10, 40, by = 5)) + 
+  coord_flip(ylim = c(-1, 35)) + 
+  labs(x = NULL, y = "Tertiary Education") + theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(), legend.position = "none")
+
+```
+
+### Generate Difference by Educ
+
+```{r}
+#Non-Tertiary - Tertiary
+diff_df <- ame_all %>%
+  select(type_label, is_tertiary, AME) %>%
+  pivot_wider(names_from = is_tertiary, values_from = AME, names_prefix = "tert_") %>%
+  mutate(
+    diff = tert_0 - tert_1,
+    diff_label = sprintf("%+.0f", round(diff)) 
+  )
+
+p_diff <- ggplot(diff_df, aes(x = type_label, y = 0)) +
+  geom_text(aes(label = diff_label), size = 4, fontface = "bold", color = "grey30", hjust = 0) +
+  coord_flip(ylim = c(0, 1)) +
+  labs(x = NULL, y = "AME\nDifference") + 
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text = element_blank(),           
+    axis.ticks = element_blank(),          
+    panel.grid = element_blank(),          
+    axis.title.y = element_blank(),        
+    axis.title.x = element_text(color = "grey30", size = 9, face = "bold.italic") 
+  )
+```
+
+
+
+
+### Compile and Save
+
+
+```{r}
+agg_png(here("Results", "Fig3.png"), res = 144, height = 750, width = 1060)
+
+ggarrange(
+  p_dots,
+  p_bar,
+  p_diff,       
+  p_bar_t,
+  ncol = 4,
+  widths = c(1.4, 1.4, 0.35, 1.4), 
+  align = "h"
+)
+
+dev.off()
+
+include_graphics(here("Results", "Fig3.png"))
+```
+
+
+## Shiny App Precompute
+
+The RAM required is very high, and therefore impractical to run in Shiny. Therefore, precompute here and upload. 
+
+### Country gains function
+
+```{r}
+
+calc_country_gains <- function(df2_full, spec, AME, ctx_data, weight_var="aweight") {
+  
+  df <- df2_full %>% 
+    left_join(ctx_data, by = "iso3c") %>% 
+    mutate(context_effect = replace_na(context_effect, 0))
+  
+  g  <- in_group(df, spec)
+  g[is.na(g)] <- FALSE
+  
+  treatable <- g & df$NFE12 == 0 & !is.na(df$skill_reading)
+  treatable[is.na(treatable)] <- FALSE
+  
+  df <- df %>%
+    mutate(
+      # With Country slope Context Effect
+      net_effect_ctx  = pmax(0, AME + context_effect),
+      skill_boost_ctx = ifelse(treatable, skill_reading + net_effect_ctx, skill_reading),
+      
+      # Baseline AME Only
+      net_effect_base  = pmax(0, AME),
+      skill_boost_base = ifelse(treatable, skill_reading + net_effect_base, skill_reading),
+      
+      g_total     = ifelse(g, 1, 0),
+      g_noale     = ifelse(g & NFE12 == 0, 1, 0)
+    )
+  
+  df$g_noale[is.na(df$g_noale)] <- 0
+  
+  out <- df %>%
+    filter(!is.na(iso3c)) %>%
+    group_by(iso3c) %>%
+    summarise(
+      skill_base  = weighted.mean(skill_reading, .data[[weight_var]], na.rm = TRUE),
+      
+      # Export both versions
+      skill_gain_ctx  = weighted.mean(skill_boost_ctx, .data[[weight_var]], na.rm = TRUE) - skill_base,
+      skill_gain_base = weighted.mean(skill_boost_base, .data[[weight_var]], na.rm = TRUE) - skill_base,
+      
+      pct_group   = weighted.mean(g_total, .data[[weight_var]], na.rm = TRUE),
+      pct_group_noale = weighted.mean(g_noale, .data[[weight_var]], na.rm = TRUE),
+      group_skill_base = weighted.mean(skill_reading[g], .data[[weight_var]][g], na.rm = TRUE),
+      pop18to65 = sum(SPFWT0, na.rm = TRUE),
+      context_effect = first(context_effect),
+      .groups = "drop"
+    )
+  
+  out
+}
+
+
+```
+
+### Shiny App Pre-computation (5-Way Intercategorical)
+
+```{r}
+# Context Effects (m5) from the Pooled Model
+df2r$m4_baseline_pred <- predict(m4_pooled, re.form = NA)
+m5_pooled <- lmer(skill_reading ~ 0 + offset(m4_baseline_pred) + (1 + NFE12_within | iso3c), data = df2r)
+
+ctx_df <- ranef(m5_pooled)$iso3c %>% 
+  rownames_to_column("iso3c") %>% 
+  select(iso3c, context_effect = NFE12_within)
+
+# Define 5-Way 
+vars_raw <- c("female", "FORBORN", "FORLANG", "children", "ed3_tertiary")
+map_within <- c(female="female_within", FORBORN="forborn_within", FORLANG="forlang_within", children="children_within", ed3_tertiary="ed3_tertiary_within")
+map_between <- c(female="female_between", FORBORN="forborn_between", FORLANG="forlang_between", children="children_between", ed3_tertiary="ed3_tertiary_between")
+
+spec_grid <- expand.grid(
+  female       = c(NA, 0L, 1L),
+  FORBORN      = c(NA, 0L, 1L),
+  FORLANG      = c(NA, 0L, 1L),
+  children     = c(NA, 0L, 1L),
+  ed3_tertiary = c(NA, 0L, 1L)
+)
+
+make_spec_id <- function(row) {
+  paste0(
+    "f=", ifelse(is.na(row$female), "all", row$female), ";",
+    "b=", ifelse(is.na(row$FORBORN), "all", row$FORBORN), ";",
+    "l=", ifelse(is.na(row$FORLANG), "all", row$FORLANG), ";",
+    "c=", ifelse(is.na(row$children), "all", row$children), ";",
+    "e=", ifelse(is.na(row$ed3_tertiary), "all", row$ed3_tertiary)
+  )
+}
+spec_grid$spec_id <- apply(spec_grid, 1, function(x) make_spec_id(as.list(x)))
+
+# Helpers
+make_newdata_for_pooled <- function(df_base, spec, nfe_value) {
+  nd <- df_base
+  nd$NFE12_within <- nfe_value - nd$NFE12_between
+  for (v in vars_raw) {
+    target <- spec[[v]]
+    if (!is.na(target)) nd[[map_within[[v]]]] <- target - nd[[map_between[[v]]]]
+  }
+  nd
+}
+
+calc_ame_pooled <- function(model, df_base, spec, weight_var="aweight") {
+  nd0 <- make_newdata_for_pooled(df_base, spec, 0)
+  nd1 <- make_newdata_for_pooled(df_base, spec, 1)
+  p0 <- predict(model, newdata = nd0, re.form = NA)
+  p1 <- predict(model, newdata = nd1, re.form = NA)
+  
+  d <- p1 - p0
+  w <- df_base[[weight_var]]
+  ok <- is.finite(d) & is.finite(w) & !is.na(w) & w > 0
+  d <- d[ok]; w <- w[ok]
+  ame <- weighted.mean(d, w)
+  se  <- sqrt(sum(w^2 * (d - ame)^2) / (sum(w)^2))
+  list(AME = ame, SE = se, lower = ame - 1.96*se, upper = ame + 1.96*se)
+}
+
+in_group <- function(df, spec) {
+  idx <- rep(TRUE, nrow(df))
+  for (v in vars_raw) {
+    target <- spec[[v]]
+    if (!is.na(target)) idx <- idx & (df[[v]] == target)
+  }
+  idx
+}
+```
+
+### Main computation
+
+
+```{r}
+
+precomp_combined <- pmap_dfr(spec_grid, function(female, FORBORN, FORLANG, children, ed3_tertiary, spec_id) {
+  spec <- list(female = female, FORBORN = FORBORN, FORLANG = FORLANG, children = children, ed3_tertiary = ed3_tertiary)
+  
+  ame <- calc_ame_pooled(m4_pooled, df2r, spec)
+  cg  <- calc_country_gains(df2_sub, spec, AME = ame$AME, ctx_data = ctx_df, weight_var = "aweight")
+  
+  cg$spec_id <- spec_id
+  cg$AME     <- ame$AME
+  cg$SE      <- ame$SE
+  cg$lower   <- ame$lower
+  cg$upper   <- ame$upper
+  cg
+})
+
+# Save for deployment in Shiny
+saveRDS(precomp_combined, here("Shiny", "precomp_spec_country.rds"))
+saveRDS(spec_grid, here("Shiny", "precomp_spec_grid.rds"))
+
+```
+
+## Citations
+
+```{r}
+
+packages %>%
+  map(citation) %>%
+  print(style = "text")
+
+```
+
+
+## Colophon
+
+```{r}
+
+sessionInfo()
+
+```
+

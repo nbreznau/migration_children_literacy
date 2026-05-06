@@ -1,6 +1,7 @@
 ---
 title: "03 Main Analyses"
-author: "Nate Breznau"
+subtitle: "The ‘Immigration Issue’ Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy in Upper- and Middle-Income Countries"
+author: "Author Omitted for Blind Peer Review"
 output:
   word_document:
     toc: true
@@ -10,17 +11,15 @@ output:
     toc_float: true
     number_sections: true
     toc_depth: 1
-  pdf_document:
-    toc: true
-    toc_depth: '1'
+
 ---
 
 
 ## Setup   
 
-```{r setup, echo = F, warning = F, message = F}
+```{r setup}
 
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 packages <- c('tidyverse',
               'readr',
@@ -209,15 +208,12 @@ country_between_scaled <- function(dat, between_vars, suffix = "_z") {
 
 ```{r}
 
-# df2
 df2_sub <- df2_sub %>%
   left_join(country_between_scaled(df2_sub, between_vars), by = "iso3c")
 
-# df2_imm
 df2_imm <- df2_imm %>%
   left_join(country_between_scaled(df2_imm, between_vars), by = "iso3c") 
 
-# df2_nat
 df2_nat <- df2_nat %>%
   left_join(country_between_scaled(df2_nat, between_vars), by = "iso3c") 
 ```
@@ -440,6 +436,7 @@ export_summs(
 
 include_graphics(here("Results", "TA4.docx"))
 ```
+
 #### Predictions
 
 ```{r}
@@ -891,8 +888,6 @@ include_graphics(here("Results", "Fig1_sCI.png"))
 ### Population Predictions
 
 
-
-
 #### Predictions
 
 Many ideas supported by interactions with ChatGPT and Google Gemini
@@ -1040,151 +1035,6 @@ make_all_specs <- function(vars = vars_raw) {
 specs_all <- make_all_specs()
 nrow(specs_all)  # 80
 ```
-
-#### ALE country effect
-
-The 'human capital potential' is the fixed group-specific effect that occurs across countries. However, there is likely a context effect of ALE (the capacity for and effectiveness of ALE for example although the exact mechanism is not observed and it is only a context effect) that can be modelled by random-slopes. 
-
-But I already have the group-specific results, based on a theoretical argument about a 'universal' potential of these groups. So I use these random-slopes for ALE as an offset, keeping the m4 slopes fixed.
-
-
-```{r}
-df2r$m4_baseline_pred <- predict(m4, re.form = NA)
-
-m5 <- lmer(skill_reading ~ 0 + offset(m4_baseline_pred) + (1 + NFE12_within | iso3c), 
-                      data = df2r)
-
-# Extract random slopes for ALE
-ctx_df <- ranef(m5)$iso3c %>% 
-  rownames_to_column("iso3c") %>% 
-  select(iso3c, context_effect = NFE12_within)
-
-```
-
-```{r}
-
-df2r <- subset(df2r, !is.na(female) & !is.na(NFE12) & !is.na(children_within) &
-                 !is.na(forborn_within) & !is.na(forlang_within) &
-                 !is.na(ed3) & !is.na(gdppc) & !is.na(skill_reading))
-
-ame_specs <- specs_all %>%
-  mutate(res = pmap(select(., all_of(vars_raw)), \(female, FORBORN, FORLANG, children) {
-    spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
-    calc_ame_spec(m5, df2r, spec, weight_var="aweight")
-  })) %>%
-  mutate(
-    AME   = map_dbl(res, "AME"),
-    SE    = map_dbl(res, "SE"),
-    lower = map_dbl(res, "lower"),
-    upper = map_dbl(res, "upper")
-  ) %>%
-  select(-res)
-
-# Example: pick the 12 "fully specified" 
-
-ame_12 <- ame_specs %>%
-  filter(if_all(all_of(vars_raw), ~ !is.na(.))) %>%
-  mutate(type = spec_label)
-
-# scale SE by sqrt(N_old / N_new); old N_old was the pooled micro N, but was using 5700.
-
-adjust_se_to_n <- function(se, n_ref, n_new) se * sqrt(n_ref / n_new)
-
-n_ref <- nrow(df2r)
-n_new <- 5700
-
-ame_12 <- ame_12 %>%
-  mutate(
-    SE_sCI = adjust_se_to_n(SE, n_ref, n_new),
-    lower_sCI = AME - 1.96 * SE_sCI,
-    upper_sCI = AME + 1.96 * SE_sCI
-  )
-
-```
-
-#### Save for Shiny
-
-```{r}
-#saveRDS(df2,  here("Shiny", "shiny_df2.rds"))
-#saveRDS(df2r, here("Shiny", "shiny_df2r.rds"))
-
-# Save model
-#saveRDS(m4,   here("Shiny", "shiny_m4.rds"))
-
-# Save helper functions + mappings in one object
-shiny_helpers <- list(
-  vars_raw     = vars_raw,
-  map_within   = map_within,
-  map_between  = map_between,
-  make_newdata_for_m4 = make_newdata_for_m4,
-  in_group     = in_group,
-  calc_ame_spec = calc_ame_spec,
-  calc_country_gains = calc_country_gains
-)
-
-saveRDS(shiny_helpers, here("Shiny", "shiny_helpers.rds"))
-```
-
-
-#### Precompute  
-
-The RAM needed to run predict every time is too large for shinyapps.io, this precomputes everything
-
-```{r}
-vars_raw <- c("female","FORBORN","FORLANG","children")
-
-spec_grid <- expand.grid(
-  female   = c(NA, 0L, 1L),
-  FORBORN  = c(NA, 0L, 1L),
-  FORLANG  = c(NA, 0L, 1L),
-  children = c(NA, 0L, 1L)
-)
-
-spec_to_id <- function(row) {
-  paste0(
-    "f=", ifelse(is.na(row$female), "all", row$female), ";",
-    "b=", ifelse(is.na(row$FORBORN), "all", row$FORBORN), ";",
-    "l=", ifelse(is.na(row$FORLANG), "all", row$FORLANG), ";",
-    "c=", ifelse(is.na(row$children), "all", row$children)
-  )
-}
-
-spec_grid$spec_id <- apply(spec_grid, 1, function(x) spec_to_id(as.list(x)))
-
-
-```
-
-
-
-```{r}
-
-precomp <- pmap_dfr(spec_grid, function(female, FORBORN, FORLANG, children, spec_id) {
-  spec <- list(female=female, FORBORN=FORBORN, FORLANG=FORLANG, children=children)
-  
-  ame <- calc_ame_spec(m4, df2r, spec, weight_var="aweight")
-  
-  # PASS ctx_df INTO THE FUNCTION HERE
-  cg  <- calc_country_gains(df2, spec, AME=ame$AME, ctx_data=ctx_df, weight_var="aweight")
-  
-  cg$spec_id <- spec_id
-  cg$AME     <- ame$AME
-  cg$SE      <- ame$SE
-  cg$lower   <- ame$lower
-  cg$upper   <- ame$upper
-  cg
-})
-
-saveRDS(precomp, here("Shiny", "precomp_spec_country.rds"))
-saveRDS(spec_grid, here("Shiny", "precomp_spec_grid.rds"))
-
-
-```
-
-
-
-
-
-
 
 
 ## Citations

@@ -1,19 +1,16 @@
 ---
 title: "02 Descriptives"
 subtitle: "The ‘Immigration Issue’ Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy in Upper- and Middle-Income Countries"
-author: "Nate Breznau"
+author: "Author Omitted for Blind Peer Review"
 output:
   html_document:
     toc: true
     toc_float: true
     number_sections: true
-    toc_depth: '3'
-  pdf_document:
-    toc: true
-    toc_depth: '3'
+    toc_depth: 1
 ---
 
-Data prepared for this stage in 01_Data_Setup.Rmd. Except for Table A1, which brings in 
+Data prepared for this stage in 01_Data_Setup.Rmd. Except for Table A1 (new data imported)
 
 The first cycle of PIAAC is included to demonstrate change in literacy across countries. 
 
@@ -21,9 +18,9 @@ Many functions are stored in the /Sub folder and called in this workflow.
 
 ## Setup   
 
-```{r setup, echo = F, warning = F, message = F}
+```{r setup, warning = F, message = F}
 
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 packages <- c('tidyverse',
               'readr',
@@ -34,7 +31,8 @@ packages <- c('tidyverse',
               'ragg',
               'survey',
               'kableExtra',
-              'scales')
+              'scales',
+              'wbstats')
 
 pacman::p_load(packages, character.only = T)
 
@@ -42,14 +40,14 @@ pacman::p_load(packages, character.only = T)
 
 ## Data
 
-```{r }
-
+```{r}
 
 df <- read_rds(here("Data", "df.RDS")) 
 df2 <- read_rds(here("Data", "df2.RDS")) 
 
-# basic or lower literacy
+# basic or lower literacy, drop Denmark because FORLANG is missing
 df2 <- df2 %>%
+  subset(iso3c != "DNK") %>%
   mutate(reading_low = ifelse(literacy_level %in% c(0, 1), 1, 0),
          ALL = 1)
 
@@ -149,7 +147,7 @@ ggplot(plot_df, aes(x = iso3c, y = change_lit, fill = group)) +
   coord_flip() +
   labs(
     x = NULL,
-    y = "Change in Literacy (Cycle 2, 2022 − Cycle 1, 2012)",
+    y = "Change in Literacy (Cycle 2, 2022/23 − Cycle 1, 2012/13)",
     title = "Change in Mean Literacy between PIAAC Cycles",
     caption = "NOTE: estimated with R survey package using repeated measures and population weights",
     fill = NULL
@@ -564,6 +562,60 @@ save_kable(table_output, file = here::here("Results", "Table_S1ag.html"))
 table_output
 
 
+```
+
+### Table S6. Omitted Intercategories
+
+```{r}
+
+summary_table <- df2 %>%
+  mutate(
+    g1 = ifelse(FORBORN == 0 & FORLANG == 1, 1, 0),
+    g1_ale = ifelse(g1 == 1 & NFE12 == 1, 1, 0),
+    
+    g2 = ifelse(FORBORN == 1 & FORLANG == 0, 1, 0),
+    g2_ale = ifelse(g2 == 1 & NFE12 == 1, 1, 0)
+  ) %>%
+  group_by(iso3c) %>%
+ 
+  summarise(
+    # Native-born, non-native speaker
+    pct_g1 = weighted.mean(g1, SPFWT0, na.rm = TRUE) * 100,
+    pct_g1_ale = weighted.mean(g1_ale, SPFWT0, na.rm = TRUE) * 100,
+    ratio_g1 = pct_g1 / pct_g1_ale,
+    
+    # Foreign-born, native speaker
+    pct_g2 = weighted.mean(g2, SPFWT0, na.rm = TRUE) * 100,
+    pct_g2_ale = weighted.mean(g2_ale, SPFWT0, na.rm = TRUE) * 100,
+    ratio_g2 = pct_g2 / pct_g2_ale,
+    
+    .groups = "drop"
+  ) %>%
+  # Country population
+  left_join(
+    wb_data("SP.POP.TOTL", start_date = 2023, end_date = 2023) %>%
+      select(iso3c, pop_2023 = SP.POP.TOTL),
+    by = "iso3c"
+  ) %>%
+
+  select(iso3c, pop_2023, pct_g1, pct_g1_ale, ratio_g1, pct_g2, pct_g2_ale, ratio_g2
+  )
+
+summary_table <- summary_table %>%
+  mutate(across(c(starts_with("pct_"), starts_with("ratio_")), ~ round(.x, 2)))
+
+kable(
+  summary_table, 
+  col.names = c("ISO3", "Pop 2023", 
+                "Nat-born/Non-nat (%)", "ALE Nat-born/Non-nat (%)", "Ratio", 
+                "FB/Nat-speaker (%)", "ALE FB/Nat-speaker (%)", "Ratio")
+)
+
+write.csv(
+  summary_table, 
+  file = here("Results", "TS2.csv"), 
+  row.names = FALSE
+)
 ```
 
 ## Fig 1. Intersectionality of Literacy
@@ -1493,7 +1545,7 @@ df_a2num_de_X <- df_a2num_de %>%
 
 pdex <- ggplot(df_a2num_de_X, aes(x = x, y = y, color = mean)) +
   geom_segment(
-    data = edges_de,
+    data = edges_de_num,
     aes(x = x, y = y, xend = xend, yend = yend),
     color = "grey75",
     linetype = "dotted"
@@ -1606,17 +1658,6 @@ table_16_out <- table_16_groups %>%
 save_kable(table_16_out, file = here::here("Results", "TS3.html"))
 
 table_16_out
-```
-
-### Calculate sample size
-
-Native born but non-native-speaking is very rare. Calculate percentages by group
-
-```{r}
-
-m_native = (1209+730)/(29373+18353+1209+730)
-f_native = (652+1459)/(40523+14459+1459+652)
-
 ```
 
 
