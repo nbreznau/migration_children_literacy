@@ -71,7 +71,6 @@ m5 <- lmer(
     children_within + children_between_z +
     forlang_within + forlang_between_z +
     forborn_within + forborn_between_z +
-    #collinearity problem?
     ed3_secondary_within + ed3_secondary_between_z + 
     ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc_k_log +
