@@ -239,7 +239,7 @@ df_2A <- df_2A %>%
 
 
 
-write.csv(df_2A, here("Results", "TS2.csv"), row.names = FALSE)
+write.csv(df_2A, here("Results", "TS4.csv"), row.names = FALSE)
 
 kable(df_2A)
 rm(df_2A)
@@ -613,7 +613,7 @@ kable(
 
 write.csv(
   summary_table, 
-  file = here("Results", "TS2.csv"), 
+  file = here("Results", "TS3.csv"), 
   row.names = FALSE
 )
 ```
@@ -1081,21 +1081,21 @@ df_a2num_de <- df_a2num_de %>%
 #conmecting lines
 edges <- df_a2 %>%
   #mutate(y = y + 1) %>%
-  select(child = group_label, xend = x, yend = y, parent) %>%
+  dplyr::select(child = group_label, xend = x, yend = y, parent) %>%
   left_join(df_a2 %>% select(parent = group_label, x, y),
             by = "parent", relationship = "many-to-one") %>%
   filter(!is.na(parent))
 
 edges_rich <- df_a2_rich %>%
   #mutate(y = y + 1) %>%
-  select(child = group_label, xend = x, yend = y, parent) %>%
+  dplyr::select(child = group_label, xend = x, yend = y, parent) %>%
   left_join(df_a2_rich %>% select(parent = group_label, x, y),
             by = "parent", relationship = "many-to-one") %>%
   filter(!is.na(parent))
 
 edges_eur <- df_a2_eur %>%
   #mutate(y = y + 1) %>%
-  select(child = group_label, xend = x, yend = y, parent) %>%
+  dplyr::select(child = group_label, xend = x, yend = y, parent) %>%
   left_join(df_a2_eur %>% select(parent = group_label, x, y),
             by = "parent", relationship = "many-to-one") %>%
   filter(!is.na(parent))
@@ -1103,14 +1103,14 @@ edges_eur <- df_a2_eur %>%
 # DE
 edges_de <- df_a2_de %>%
   #mutate(y = y + 1) %>%
-  select(child = group_label, xend = x, yend = y, parent) %>%
+  dplyr::select(child = group_label, xend = x, yend = y, parent) %>%
   left_join(df_a2_de %>% select(parent = group_label, x, y),
             by = "parent", relationship = "many-to-one") %>%
   filter(!is.na(parent))
 
 edges_de_num <- df_a2num_de %>%
   #mutate(y = y + 1) %>%
-  select(child = group_label, xend = x, yend = y, parent) %>%
+  dplyr::select(child = group_label, xend = x, yend = y, parent) %>%
   left_join(df_a2num_de %>% select(parent = group_label, x, y),
             by = "parent", relationship = "many-to-one") %>%
   filter(!is.na(parent))
@@ -1463,11 +1463,55 @@ include_graphics(here("Results", "Fig2A_D.png"))
 
 ##### Lit DE Labels
 
+###### Updated split polygons
+
 ```{r}
 
-agg_png(here("Results", "Fig2A_D_Deutsch.png"), res = 576, width = 3200, height = 2250)
+df_de_base <- df2de %>%
+  filter(!is.na(SPFWT0), !is.na(ed3), !is.na(skill_reading)) %>%
+  mutate(
+    is_tertiary = ed3 == 3,
+    target_score = skill_reading
+  )
 
+# split weighted means from node token strings
+compute_split_means <- function(label_str) {
+  sub_df <- df_de_base
+  if (label_str != "ALL") {
+    tokens <- str_split(label_str, "_")[[1]]
+    if ("male" %in% tokens) sub_df <- sub_df %>% filter(female == 0)
+    if ("female" %in% tokens) sub_df <- sub_df %>% filter(female == 1)
+    if ("not" %in% tokens) sub_df <- sub_df %>% filter(FORBORN == 0)
+    if ("fb" %in% tokens) sub_df <- sub_df %>% filter(FORBORN == 1)
+    if ("natlang" %in% tokens) sub_df <- sub_df %>% filter(FORLANG == 0)
+    if ("notnatlang" %in% tokens) sub_df <- sub_df %>% filter(FORLANG == 1)
+    if ("child" %in% tokens) sub_df <- sub_df %>% filter(children == 1)
+    if ("nochild" %in% tokens) sub_df <- sub_df %>% filter(children == 0)
+  }
+  
+  res <- sub_df %>%
+    group_by(is_tertiary) %>%
+    summarise(
+      wmean = weighted.mean(target_score, SPFWT0, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  tert_val <- res %>% filter(is_tertiary == TRUE) %>% pull(wmean)
+  nontert_val <- res %>% filter(is_tertiary == FALSE) %>% pull(wmean)
+  
+  tibble(
+    group_label = label_str,
+    mean_tert = if (length(tert_val) > 0) tert_val else NA_real_,
+    mean_nontert = if (length(nontert_val) > 0) nontert_val else NA_real_
+  )
+}
+
+# Apply computations across all active tree nodes
+split_lit_means <- map_dfr(df_a2_de$group_label, compute_split_means)
+
+# Translate core concept labels to standard German formatting
 df_a2_de_X <- df_a2_de %>%
+  left_join(split_lit_means, by = "group_label") %>%
   mutate(plot_label = case_match(plot_label,
                                  "Male" ~ "Männer",
                                  "Female" ~ "Frauen",
@@ -1476,46 +1520,62 @@ df_a2_de_X <- df_a2_de %>%
                                  "Native" ~ "Erstsprache",
                                  "Non-native" ~ "nicht Erstsprache",
                                  "Parent" ~ "Mit",
-                                 "Childless" ~ "Ohne")
-  )
+                                 "Childless" ~ "Ohne"))
 
-pdex <- ggplot(df_a2_de_X, aes(x = x, y = y, color = mean)) +
-  geom_segment(
-    data = edges_de,
-    aes(x = x, y = y, xend = xend, yend = yend),
-    color = "grey75",
-    linetype = "dotted"
+# Trigonometric generation of upper and lower semi-circle polygons
+# Scaled independently to match visual node spacing perfectly
+rx <- 1.1; ry <- 0.14
+theta_top <- seq(pi, 2*pi, length.out = 30); theta_bot <- seq(0, pi, length.out = 30)
+
+poly_all <- bind_rows(
+  map_dfr(1:nrow(df_a2_de_X), function(i) {
+    row <- df_a2_de_X[i, ]; tibble(group_label = row$group_label, mean_val = row$mean_tert, half = "T", x = c(row$x, row$x + rx * cos(theta_top)), y = c(row$y, row$y + ry * sin(theta_top)))
+  }),
+  map_dfr(1:nrow(df_a2_de_X), function(i) {
+    row <- df_a2_de_X[i, ]; tibble(group_label = row$group_label, mean_val = row$mean_nontert, half = "N", x = c(row$x, row$x + rx * cos(theta_bot)), y = c(row$y, row$y + ry * sin(theta_bot)))
+  })
+)
+
+# 4. Final render assembly
+pdex <- ggplot() +
+  geom_segment(data = edges_de, aes(x = x, y = y, xend = xend, yend = yend), color = "grey75", linetype = "dotted") +
+  geom_polygon(data = poly_all, aes(x = x, y = y, fill = mean_val, group = interaction(group_label, half)), color = "black", linewidth = 0.2) +
+  geom_text(data = df_a2_de_X, aes(x = x, y = y - ry - 0.04, label = sprintf("%.0f", mean_tert)), vjust = 0, size = 2.1, 
+            #fontface = "bold", 
+            color = "black") +
+  geom_text(data = df_a2_de_X, aes(x = x, y = y + ry + 0.04, label = sprintf("%.0f", mean_nontert)), vjust = 1, size = 2.1, color = "black") +
+  geom_text(data = df_a2_de_X, aes(x = x, y = y + ry + 0.22, label = plot_label), vjust = 1, size = 1.8, color = "grey20") +
+  annotate("text", x = -50, y = 0.0, label = "Oberer Wert: mit Tertiärabschluss\nUnterer Wert: ohne Tertiärabschluss", hjust = 0, size = 2.5, fontface = "italic", color = "grey20") +
+  scale_fill_viridis_c(name = "Literalität", na.value = "grey85") +
+  guides(
+    fill = guide_colorbar(
+      barwidth = unit(6, "cm"),  # Shortens bar width
+      barheight = unit(0.3, "cm") # Thins bar height
+    )
   ) +
-  geom_point(size = 5) +
-  geom_text(
-    aes(label = round(mean, 0)), 
-    vjust = -2.2, 
-    size = 2.2, 
-    color = "black"
-    ) +
-  geom_text(
-    aes(label = plot_label),
-    vjust = 3,
-    size = 1.7,
-    color = "black"
-    ) +
-  scale_color_viridis_c(name = "Literalität") +
   scale_y_reverse(
-    breaks = 0:4,
-    labels = c("Gesamt", "Geschlecht", "Migration", "Deutsch", "Elternschaft"),
-    limits = c(4.1,-0.1)
-    ) +
-  labs(
-    x = NULL, y = "Gruppen",
-    title = NULL
+    breaks = 0:4, 
+    labels = c("Gesamt", "Geschlecht", "Migration", "Deutsch", "Elternschaft"), 
+    limits = c(4.7, -0.3) # Increase avoids trmmed visual
   ) +
-  theme_classic() +
+  labs(x = NULL, y = "Gruppen", title = NULL) +
+  theme_classic() + 
   theme(
     legend.position = "bottom",
-    panel.grid.minor = element_blank(),
-    axis.text.x = element_blank(),
+    legend.title = element_text(size = 8), 
+    legend.text = element_text(size = 8),
+    axis.text.x = element_blank(), 
     axis.ticks.x = element_blank()
   )
+
+
+```
+
+###### Plot
+
+```{r}
+
+agg_png(here("Results", "Fig2A_D_Deutsch.png"), res = 576, width = 3200, height = 2250)
 
 pdex
 
@@ -1527,61 +1587,148 @@ include_graphics(here("Results", "Fig2A_D_Deutsch.png"))
 
 ##### Num DE Labels
 
+###### New polygons
+
 ```{r}
 
-agg_png(here("Results", "Fig2A_D_Num_Deutsch.png"), res = 576, width = 3200, height = 2250)
-
-df_a2num_de_X <- df_a2num_de %>%
-  mutate(plot_label = case_match(plot_label,
-                                 "Male" ~ "Männer",
-                                 "Female" ~ "Frauen",
-                                 "Native-born" ~ "DE geboren",
-                                 "Foreign-born" ~ "Ausl. geboren",
-                                 "Native" ~ "Erstsprache",
-                                 "Non-native" ~ "nicht Erstsprache",
-                                 "Parent" ~ "Mit",
-                                 "Childless" ~ "Ohne")
+df_de_num_base <- df2 %>%
+  filter(iso3c == "DEU", ed_currently != 1) %>%
+  filter(!is.na(SPFWT0), !is.na(ed3), !is.na(skill_numeracy)) %>%
+  mutate(
+    is_tertiary = ed3 == 3,
+    target_score = skill_numeracy
   )
 
-pdex <- ggplot(df_a2num_de_X, aes(x = x, y = y, color = mean)) +
+# 2. Compute split weighted means
+compute_split_num_means <- function(label_str) {
+  sub_df <- df_de_num_base
+  if (label_str != "ALL") {
+    tokens <- str_split(label_str, "_")[[1]]
+    if ("male" %in% tokens) sub_df <- sub_df %>% filter(female == 0)
+    if ("female" %in% tokens) sub_df <- sub_df %>% filter(female == 1)
+    if ("not" %in% tokens) sub_df <- sub_df %>% filter(FORBORN == 0)
+    if ("fb" %in% tokens) sub_df <- sub_df %>% filter(FORBORN == 1)
+    if ("natlang" %in% tokens) sub_df <- sub_df %>% filter(FORLANG == 0)
+    if ("notnatlang" %in% tokens) sub_df <- sub_df %>% filter(FORLANG == 1)
+    if ("child" %in% tokens) sub_df <- sub_df %>% filter(children == 1)
+    if ("nochild" %in% tokens) sub_df <- sub_df %>% filter(children == 0)
+  }
+  
+  res <- sub_df %>%
+    group_by(is_tertiary) %>%
+    summarise(
+      wmean = weighted.mean(target_score, SPFWT0, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  tert_val <- res %>% filter(is_tertiary == TRUE) %>% pull(wmean)
+  nontert_val <- res %>% filter(is_tertiary == FALSE) %>% pull(wmean)
+  
+  tibble(
+    group_label = label_str,
+    mean_tert = if (length(tert_val) > 0) tert_val else NA_real_,
+    mean_nontert = if (length(nontert_val) > 0) nontert_val else NA_real_
+  )
+}
+
+split_num_means <- map_dfr(df_a2num_de$group_label, compute_split_num_means)
+
+# 3. Apply scale adjustment and German labels
+# This step ensures the tree width matches the Literacy plot (x * 3)
+df_a2num_de_X <- df_a2num_de %>%
+  left_join(split_num_means, by = "group_label") %>%
+  mutate(
+    x = x * 3, # CRITICAL SCALE FIX
+    plot_label = case_match(plot_label,
+                             "Male" ~ "Männer",
+                             "Female" ~ "Frauen",
+                             "Native-born" ~ "DE geboren",
+                             "Foreign-born" ~ "Ausl. geboren",
+                             "Native" ~ "Erstsprache",
+                             "Non-native" ~ "nicht Erstsprache",
+                             "Parent" ~ "Mit",
+                             "Childless" ~ "Ohne")
+  )
+
+# Adjust edges to match scaled x-coordinates
+edges_de_num_scaled <- edges_de_num %>%
+  mutate(x = x * 3, xend = xend * 3)
+
+# 4. Polygon generation
+rx <- 1.1; ry <- 0.14
+theta_top <- seq(pi, 2*pi, length.out = 30); theta_bot <- seq(0, pi, length.out = 30)
+
+poly_num_all <- bind_rows(
+  map_dfr(1:nrow(df_a2num_de_X), function(i) {
+    row <- df_a2num_de_X[i, ]
+    tibble(group_label = row$group_label, mean_val = row$mean_tert, half = "T", 
+           x = c(row$x, row$x + rx * cos(theta_top)), y = c(row$y, row$y + ry * sin(theta_top)))
+  }),
+  map_dfr(1:nrow(df_a2num_de_X), function(i) {
+    row <- df_a2num_de_X[i, ]
+    tibble(group_label = row$group_label, mean_val = row$mean_nontert, half = "N", 
+           x = c(row$x, row$x + rx * cos(theta_bot)), y = c(row$y, row$y + ry * sin(theta_bot)))
+  })
+)
+
+# 5. Assemble pdex_num
+pdex_num <- ggplot() +
   geom_segment(
-    data = edges_de_num,
+    data = edges_de_num_scaled,
     aes(x = x, y = y, xend = xend, yend = yend),
-    color = "grey75",
-    linetype = "dotted"
+    color = "grey75", linetype = "dotted"
   ) +
-  geom_point(size = 5) +
+  geom_polygon(
+    data = poly_num_all,
+    aes(x = x, y = y, fill = mean_val, group = interaction(group_label, half)),
+    color = "black", linewidth = 0.2
+  ) +
   geom_text(
-    aes(label = round(mean, 0)), 
-    vjust = -2.2, 
-    size = 2.2, 
-    color = "black"
-    ) +
+    data = df_a2num_de_X,
+    aes(x = x, y = y - ry - 0.04, label = sprintf("%.0f", mean_tert)),
+    vjust = 0, size = 2.1, color = "black"
+  ) +
   geom_text(
-    aes(label = plot_label),
-    vjust = 3,
-    size = 1.7,
-    color = "black"
-    ) +
-  scale_color_viridis_c(name = "Numeralität") +
+    data = df_a2num_de_X,
+    aes(x = x, y = y + ry + 0.04, label = sprintf("%.0f", mean_nontert)),
+    vjust = 1, size = 2.1, color = "black"
+  ) +
+  geom_text(
+    data = df_a2num_de_X,
+    aes(x = x, y = y + ry + 0.22, label = plot_label),
+    vjust = 1, size = 1.8, color = "grey20"
+  ) +
+  # Annotation x coordinate set to -50 to match Literacy figure exactly
+  annotate("text", x = -50, y = 0.0, label = "Oberer Wert: mit Tertiärabschluss\nUnterer Wert: ohne Tertiärabschluss", 
+           hjust = 0, size = 2.5, fontface = "italic", color = "grey20") +
+  scale_fill_viridis_c(name = "Numeralität", na.value = "grey85") +
+  guides(
+    fill = guide_colorbar(barwidth = unit(6, "cm"), barheight = unit(0.3, "cm"))
+  ) +
   scale_y_reverse(
     breaks = 0:4,
     labels = c("Gesamt", "Geschlecht", "Migration", "Deutsch", "Elternschaft"),
-    limits = c(4.1,-0.1)
-    ) +
-  labs(
-    x = NULL, y = "Gruppen",
-    title = NULL
+    limits = c(4.7, -0.3)
   ) +
+  labs(x = NULL, y = "Gruppen", title = NULL) +
   theme_classic() +
   theme(
     legend.position = "bottom",
     panel.grid.minor = element_blank(),
+    legend.title = element_text(size = 8), 
+    legend.text = element_text(size = 8),
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()
   )
+```
 
-pdex
+###### Plot
+
+```{r}
+
+agg_png(here("Results", "Fig2A_D_Num_Deutsch.png"), res = 576, width = 3200, height = 2250)
+
+pdex_num
 
 dev.off()
 

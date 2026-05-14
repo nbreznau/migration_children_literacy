@@ -106,7 +106,7 @@ df2_sub <- df2_sub %>% left_join(country_between_scaled(df2_sub, between_vars), 
 # Base dataframe for predictions (complete cases only)
 df2r <- subset(df2_sub, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & 
                  !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & 
-                 !is.na(gdppc) & !is.na(skill_reading))
+                 !is.na(skill_reading))
 
 # Grand means for recentering
 gm_female <- mean(df2r$female_between, na.rm = TRUE)
@@ -131,7 +131,6 @@ m4_sub <- lmer(
     female_within * forborn_within * children_within * forlang_within * NFE12_within +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc_k_log +
     (1 | iso3c),
   data = df2_sub
 )
@@ -154,7 +153,6 @@ m5_sub <- lmer(
     forborn_within + forborn_between_z +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc_k_log +
     female_within * forborn_within * children_within * forlang_within * NFE12_within * ed3_tertiary_within +
     (1 | iso3c),
   data = df2_sub
@@ -398,7 +396,7 @@ df2_global <- df2_global %>% left_join(country_between_scaled(df2_global, betwee
 # Filter to complete cases for predictions
 df2r_global <- subset(df2_global, !is.na(female) & !is.na(NFE12) & !is.na(children) & 
                  !is.na(FORBORN) & !is.na(FORLANG) & !is.na(ed3) & 
-                 !is.na(gdppc) & !is.na(skill_reading))
+                 !is.na(skill_reading))
 
 # Calculate global grand means
 gm_female_global <- mean(df2r_global$female_between, na.rm = TRUE)
@@ -520,7 +518,7 @@ df2_mid <- df2_mid %>% left_join(country_between_scaled(df2_mid, between_vars), 
 # Base dataframe for predictions
 df2r_mid <- subset(df2_mid, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & 
                  !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & 
-                 !is.na(gdppc) & !is.na(skill_reading))
+                 !is.na(skill_reading))
 
 # Grand means for recentering
 gm_female_mid <- mean(df2r_mid$female_between, na.rm = TRUE)
@@ -541,7 +539,6 @@ m5_mid <- lmer(
     forborn_within + forborn_between_z +
     ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc_k_log +
     female_within * forborn_within * children_within * forlang_within * NFE12_within * ed3_tertiary_within +
     (1 | iso3c),
   data = df2_mid
@@ -739,7 +736,7 @@ country_ates <- map_dfr(all_countries, function(c_code) {
   # Ensure sufficient observations for intersectional model
   if(nrow(df_c) < 50) return(NULL)
   
-  # Run unadjusted OLS (gdppc omitted because it is a country constant)
+  # Run unadjusted OLS 
   m_c <- lm(skill_reading ~ female * FORBORN * children * FORLANG * NFE12 * ed3_tertiary, 
             data = df_c, weights = SPFWT0)
   

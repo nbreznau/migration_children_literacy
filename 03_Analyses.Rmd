@@ -58,6 +58,8 @@ df2 <- read_rds(here("Data", "df2.RDS"))
 
 ### Table A2. OLS
 
+I cannot use secondary education because it confounds the interactions in the intersectionality models. It leads to really small groups and mixes interactions with main effects of primary/secondary education. 
+
 
 ```{r}
 
@@ -67,13 +69,13 @@ df_nat <- subset(df2, FORBORN == 0 & !is.na(NFE12) & !is.na(children) & !is.na(F
 
 df_clean <- subset(df2, !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & ed_currently != 1 & !is.na(female))
 
-M1.1 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + factor(iso3c), data = df_imm)
+M1.1 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + I(ed3 == 3) + factor(iso3c), data = df_imm)
 
-M1.2 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + factor(ed3) + factor(iso3c), data = df_nat)
+M1.2 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + I(ed3 == 3) + factor(iso3c), data = df_nat)
 
-M1.3 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + FORBORN + factor(ed3) + factor(iso3c), data = df_clean)
+M1.3 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + FORBORN + I(ed3 == 3) + factor(iso3c), data = df_clean)
 
-M1.4 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + FORBORN*NFE12 + factor(ed3) + factor(iso3c), data = df_clean)
+M1.4 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + FORBORN*NFE12 + I(ed3 == 3) + factor(iso3c), data = df_clean)
 
 export_summs(
   M1.1, M1.2, M1.3, M1.4,
@@ -85,8 +87,7 @@ export_summs(
     "children",
     "FORLANG",
     "FORBORN",
-    "factor(ed3)2",
-    "factor(ed3)3",
+    "I(ed3 == 3)TRUE",
     "NFE12:FORBORN"
   ),
   statistics = c("N" = "nobs", "r2" = "r.squared", "AIC" = "AIC", "BIC" = "BIC"),
@@ -117,7 +118,7 @@ testp3 <- cor.test(df_clean$aweight, df_clean$resid_clean)$p.value
 
 Correlations are `r round(testcor1,3)`, `r round(testcor2,3)`, & `r round(testcor3,3)`. With p-values `r round(testp1,4)`, `r round(testp2,4)`, & `r round(testp3,4)`. This suggests that there is no need to weight the sample. We are essentially controlling for the variables that lead to selection.
 
-### Table A3. GLM/Multilevel
+### Table S1. GLM/Multilevel
 
 #### Recodes
 
@@ -227,79 +228,85 @@ df2_nat <- df2_nat %>%
 I first look at immigrants and native-born separately. Then combine them to determine if there is an 'immigrant penalty' after controlling for participation in further education and other variables. 
 
 ```{r}
-
+# M2.1: Immigrants only
 M2.1 <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     female_within + female_between_z +
     children_within + children_between_z +
     forlang_within + forlang_between_z +
-    ed3_secondary_within + ed3_secondary_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
     (1 | iso3c),
-  data = df2_imm
+  data = df2_imm,
+  REML = FALSE
 )
 
 ranef_list <- ranef(M2.1)
-
-# Get country-level grand intercept deviations
 iso3c_intercepts <- ranef_list$iso3c
 
-
-
+# M2.2: Natives only
 M2.2 <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     female_within + female_between_z +
     children_within + children_between_z +
     forlang_within + forlang_between_z +
-    ed3_secondary_within + ed3_secondary_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
     (1 | iso3c),
-  data = df2_nat
+  data = df2_nat,
+  REML = FALSE
 )
 
-M2.3a <- lmer(
+# M2.3: Pooled Main Effects (Model 3) 
+M2.3 <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     children_within + children_between_z +
     female_within + female_between_z +
-    forlang_within + forlang_between_z +
     forborn_within + forborn_between_z +
-    ed3_secondary_within + ed3_secondary_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
     (1 | iso3c),
-  data = subset(df2_sub)
+  data = df2_sub,
+  REML = FALSE
 )
 
-M2.3b <- lmer(
-  skill_reading ~ 
-    NFE12_within + NFE12_between_z +
-    children_within + children_between_z +
-    female_within + female_between_z +
-    forlang_within + forlang_between_z +
-    forborn_within + forborn_between_z +
-    ed3_secondary_within + ed3_secondary_between_z +
-    ed3_tertiary_within + ed3_tertiary_between_z +
-    gdppc_k +
-    (1 | iso3c),
-  data = subset(df2_sub)
-)
-
+# M2.4: Pooled Single Interaction (Model 4) - ALE x Forborn only
 M2.4 <- lmer(
   skill_reading ~ 
     NFE12_within + NFE12_between_z +
     children_within + children_between_z +
     female_within + female_between_z +
-    forlang_within + forlang_between_z +
     forborn_within + forborn_between_z +
-    forborn_within*NFE12_within +
-    ed3_secondary_within + ed3_secondary_between_z +
+    # this has to be removed to allow comparison across models
+    #ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
+    NFE12_within:forborn_within +
     (1 | iso3c),
-  data = subset(df2_sub)
+  data = df2_sub,
+  REML = FALSE
 )
 
+# M2.5: Pooled Additive Interactions (Model 5) - ALE x each 4-way var independently
+M2.5 <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    children_within + children_between_z +
+    female_within + female_between_z +
+    forborn_within + forborn_between_z +
+    forlang_within + forlang_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    NFE12_within:female_within +
+    NFE12_within:forborn_within +
+    NFE12_within:children_within +
+    NFE12_within:forlang_within +
+    (1 | iso3c),
+  data = df2_sub,
+  REML = FALSE
+)
 ```
 
 #### Results
@@ -308,17 +315,20 @@ M2.4 <- lmer(
 ```{r}
 
 export_summs(
-  M2.1, M2.2, M2.3a, M2.3b, M2.4,
-  #model.names = c("Foreign-born", "Native-born", "Pooled", "Pooled with ALE interaction"),
+  M2.1, M2.2, M2.3, M2.4, M2.5,
+  model.names = c("M2.1 (Immigrants)", "M2.2 (Natives)", "M2.3 (Main Effects)", "M2.4 (ALE x Forborn)", "M2.5 (ALE * 4-vars)"),
+  statistics = "all",
+  error_pos = "right",
+  error_format = "({std.error})",
   to.file = "docx",
-  file.name = here("Results", "TA3.docx"
-))
+  file.name = here("Results", "TS1.docx")
+)
 
 ```
 
 #### GDP?
 
-The correlation is significant at p <0.1 without the US. The US is kind of a disaster in this figure. 
+The correlation is significant at p <0.1 without the US. The US is kind of a disaster in this figure. GDP may be interesting to further pursue elsewhere, but is not relevant or seemingly confounding to the tests I am running here. 
 
 ```{r}
 test <- df2_sub %>%
@@ -355,7 +365,7 @@ ggplot(test_nousa, aes(gdp, lit)) +
 
 ### ATEs
 
-### Table A4. Interactive GLM
+### Table S2. Interactive GLM
 
 Here we interact all intersectional variables of interest with ALE (NFE12) to see the unique effects if any.
 
@@ -376,7 +386,7 @@ m4 <- lmer(
     forborn_within + forborn_between_z +
     # interaction with all sub-interactions
     female_within*forborn_within*children_within*forlang_within*NFE12_within +
-    ed3_secondary_within + ed3_secondary_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
     ed3_tertiary_within + ed3_tertiary_between_z +
     gdppc_k_log +
     (1 | iso3c),
@@ -398,8 +408,6 @@ export_summs(
     "Non-native speaker (between)" = "forlang_between_z",
     "Foreign-born (within)" = "forborn_within",
     "Foreign-born (between)" = "forborn_between_z",
-    "Secondary education (within)" = "ed3_secondary_within",
-    "Secondary education (between)" = "ed3_secondary_between_z",
     "Tertiary education (within)" = "ed3_tertiary_within",
     "Tertiary education (between)" = "ed3_tertiary_between_z",
     "GDP per capita (log k)" = "gdppc_k_log",
@@ -434,10 +442,10 @@ export_summs(
   error_pos = "right", 
   error_format = "({std.error})", # Formats the S.E. column (e.g., with parentheses)
   to.file = "docx",
-  file.name = here("Results", "TA4.docx")
+  file.name = here("Results", "TS2.docx")
 )
 
-include_graphics(here("Results", "TA4.docx"))
+include_graphics(here("Results", "TS2.docx"))
 
 # for 3-digit r-squared
 #summ(m4, digits = 3)
