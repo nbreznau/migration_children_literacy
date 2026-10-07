@@ -1,0 +1,1075 @@
+---
+always_allow_html: true
+title: "03 Main Analyses"
+subtitle: "The ‘Immigration Issue’ Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy in Upper- and Middle-Income Countries"
+author: "Author Omitted for Blind Peer Review"
+output:
+  word_document:
+    toc: true
+    toc_depth: '1'
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    toc_depth: 1
+
+---
+
+
+## Setup   
+
+```{r setup}
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+packages <- c('tidyverse',
+              'readr',
+              'knitr',
+              'here',
+              'ggplot2',
+              'ggrepel',
+              'ragg',
+              'kableExtra',
+              'countrycode',
+              'readxl',
+              'jtools',
+              'lme4',
+              'lmerTest',
+              'broom.mixed',
+              'viridis',
+              'survey',
+              'ggpubr',
+              'purrr')
+
+pacman::p_load(packages, character.only = T)
+
+```
+
+## Data
+
+```{r }
+
+
+#df <- read_rds(here("Data", "df.RDS")) 
+df2 <- read_rds(here("Data", "df2.RDS")) 
+
+```
+
+## Regressions
+
+### Table A2. OLS
+
+I cannot use secondary education because it confounds the interactions in the intersectionality models. It leads to really small groups and mixes interactions with main effects of primary/secondary education. 
+
+
+```{r}
+
+df_imm <- subset(df2, FORBORN == 1 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & ed_currently != 1 & !is.na(female))
+
+df_nat <- subset(df2, FORBORN == 0 & !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & ed_currently != 1 & !is.na(female))
+
+df_clean <- subset(df2, !is.na(NFE12) & !is.na(children) & !is.na(FORLANG) & !is.na(ed3) & ed_currently != 1 & !is.na(female))
+
+M1.1 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + I(ed3 == 3) + factor(iso3c), data = df_imm)
+
+M1.2 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + I(ed3 == 3) + factor(iso3c), data = df_nat)
+
+M1.3 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + FORBORN + I(ed3 == 3) + factor(iso3c), data = df_clean)
+
+M1.4 <- lm(skill_reading ~ NFE12 + female + children + FORLANG + FORBORN*NFE12 + I(ed3 == 3) + factor(iso3c), data = df_clean)
+
+export_summs(
+  M1.1, M1.2, M1.3, M1.4,
+  model.names = c("M1.1", "M1.2", "M1.3", "M1.4"),
+  coefs = c(
+    "(Intercept)",
+    "NFE12",
+    "female",
+    "children",
+    "FORLANG",
+    "FORBORN",
+    "I(ed3 == 3)TRUE",
+    "NFE12:FORBORN"
+  ),
+  statistics = c("N" = "nobs", "r2" = "r.squared", "AIC" = "AIC", "BIC" = "BIC"),
+  to.file = "docx",
+  file.name = here("Results", "TA2.docx")
+)
+
+```
+### Sample Bias Test
+
+Here I correlate the residuals with the weighting variable. If this is close to zero I can look at the sample as a representative treatment for ALE and literacy. 
+
+```{r}
+
+df_imm$resid_imm_1 <- residuals(M1.1)
+df_nat$resid_nat_1 <- residuals(M1.2)
+df_clean$resid_clean <- residuals(M1.3)
+
+testcor1 <- cor(df_imm$aweight, df_imm$resid_imm_1)
+testcor2 <- cor(df_nat$aweight, df_nat$resid_nat_1)
+testcor3 <- cor(df_clean$aweight, df_clean$resid_clean)
+
+testp1 <- cor.test(df_imm$aweight, df_imm$resid_imm_1)$p.value
+testp2 <- cor.test(df_nat$aweight, df_nat$resid_nat_1)$p.value
+testp3 <- cor.test(df_clean$aweight, df_clean$resid_clean)$p.value
+
+```
+
+Correlations are `r round(testcor1,3)`, `r round(testcor2,3)`, & `r round(testcor3,3)`. With p-values `r round(testp1,4)`, `r round(testp2,4)`, & `r round(testp3,4)`. This suggests that there is no need to weight the sample. We are essentially controlling for the variables that lead to selection.
+
+### Table S1. GLM/Multilevel
+
+#### Recodes
+
+```{r}
+
+df2_sub <- df2 %>%
+  mutate(
+    ed3_secondary = as.integer(ed3 == 2),
+    ed3_tertiary  = as.integer(ed3 == 3)
+  ) %>%
+  subset(ed_currently != 1)
+
+# within/between decomposition (weighted country means)
+df2_sub <- df2_sub %>%
+  group_by(iso3c) %>%
+  mutate(
+    male = ifelse(female == 1, 0, 1),
+    NFE12_between = sum(SPFWT0 * NFE12, na.rm = TRUE) / sum(SPFWT0[!is.na(NFE12)], na.rm = TRUE),
+    female_between = sum(SPFWT0 * female, na.rm = TRUE) / sum(SPFWT0[!is.na(female)], na.rm = TRUE),
+    male_between = sum(SPFWT0 * male, na.rm = T) / sum(SPFWT0[!is.na(male)], na.rm = TRUE),
+    children_between = sum(SPFWT0 * children, na.rm = TRUE) / sum(SPFWT0[!is.na(children)], na.rm = TRUE),
+    ed3_secondary_between = sum(SPFWT0 * ed3_secondary, na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_secondary)], na.rm = TRUE),
+    ed3_tertiary_between  = sum(SPFWT0 * ed3_tertiary,  na.rm = TRUE) / sum(SPFWT0[!is.na(ed3_tertiary)],  na.rm = TRUE),
+
+    forborn_between = sum(SPFWT0 * FORBORN, na.rm = TRUE) / sum(SPFWT0[!is.na(FORBORN)], na.rm = TRUE),
+    forlang_between = sum(SPFWT0 * FORLANG, na.rm = TRUE) / sum(SPFWT0[!is.na(FORLANG)], na.rm = TRUE),
+
+    NFE12_within = NFE12 - NFE12_between,
+    children_within = children - children_between,
+    female_within = female - female_between,
+    ed3_secondary_within = ed3_secondary - ed3_secondary_between,
+    ed3_tertiary_within = ed3_tertiary - ed3_tertiary_between,
+    forborn_within = FORBORN - forborn_between,
+    forlang_within = FORLANG - forlang_between
+  ) %>%
+  ungroup()
+
+# the within effects need to be further centered by group 
+
+df2_imm <- df2_sub %>% 
+  subset(FORBORN == 1) %>% 
+  group_by(iso3c) %>% 
+  mutate(NFE12_within = NFE12_within - mean(NFE12_within, na.rm = TRUE), 
+         female_within = female_within - mean(female_within, na.rm = T), 
+         children_within = children_within - mean(children_within, na.rm = TRUE), 
+         ed3_secondary_within = ed3_secondary_within - mean(ed3_secondary_within, na.rm = TRUE), 
+         ed3_tertiary_within = ed3_tertiary_within - mean(ed3_tertiary_within, na.rm = TRUE) ) %>% 
+  ungroup() 
+
+
+df2_nat <- df2_sub %>% 
+  subset(FORBORN_not == 1) %>% 
+  group_by(iso3c) %>% 
+  mutate(NFE12_within = NFE12_within - mean(NFE12_within, na.rm = TRUE),
+         children_within = children_within - mean(children_within, na.rm = TRUE), 
+         female_within = female_within - mean(female_within, na.rm = T), 
+         ed3_secondary_within = ed3_secondary_within - mean(ed3_secondary_within, na.rm = TRUE), 
+          ed3_tertiary_within = ed3_tertiary_within - mean(ed3_tertiary_within, na.rm = TRUE) ) %>% ungroup()
+
+between_vars <- c(
+  "NFE12_between", "female_between", "children_between",
+  "ed3_secondary_between", "ed3_tertiary_between",
+  "forborn_between", "forlang_between"
+)
+
+# build country-level x-standardized-scored between 
+country_between_scaled <- function(dat, between_vars, suffix = "_z") {
+
+  # get one row per country (so no implicit weighting by country sample size)
+  country_vals <- dat %>%
+    distinct(iso3c, across(all_of(between_vars)))
+
+  # z-score across countries
+  country_z <- country_vals %>%
+    mutate(
+      across(all_of(between_vars), ~{
+        m <- mean(.x, na.rm = TRUE)
+        s <- sd(.x, na.rm = TRUE)
+        if (is.na(s) || s == 0) NA_real_ else as.numeric((.x - m) / s)
+      }, .names = paste0("{.col}", suffix))
+    ) %>%
+    select(iso3c, ends_with(suffix))
+
+  country_z
+}
+```
+
+
+```{r}
+
+df2_sub <- df2_sub %>%
+  left_join(country_between_scaled(df2_sub, between_vars), by = "iso3c")
+
+# save for re-use in 04_
+write_rds(df2_sub, here("Data", "df2_sub.RDS"))
+
+df2_imm <- df2_imm %>%
+  left_join(country_between_scaled(df2_imm, between_vars), by = "iso3c") 
+
+df2_nat <- df2_nat %>%
+  left_join(country_between_scaled(df2_nat, between_vars), by = "iso3c") 
+```
+
+
+#### Models
+
+I first look at immigrants and native-born separately. Then combine them to determine if there is an 'immigrant penalty' after controlling for participation in further education and other variables. 
+
+```{r}
+# M2.1: Immigrants only
+M2.1 <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    female_within + female_between_z +
+    children_within + children_between_z +
+    forlang_within + forlang_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    (1 | iso3c),
+  data = df2_imm,
+  REML = FALSE
+)
+
+ranef_list <- ranef(M2.1)
+iso3c_intercepts <- ranef_list$iso3c
+
+# M2.2: Natives only
+M2.2 <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    female_within + female_between_z +
+    children_within + children_between_z +
+    forlang_within + forlang_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    (1 | iso3c),
+  data = df2_nat,
+  REML = FALSE
+)
+
+# M2.3: Pooled Main Effects (Model 3) 
+M2.3 <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    children_within + children_between_z +
+    female_within + female_between_z +
+    forborn_within + forborn_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    (1 | iso3c),
+  data = df2_sub,
+  REML = FALSE
+)
+
+# M2.4: Pooled Single Interaction (Model 4) - ALE x Forborn only
+M2.4 <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    children_within + children_between_z +
+    female_within + female_between_z +
+    forborn_within + forborn_between_z +
+    # this has to be removed to allow comparison across models
+    #ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    NFE12_within:forborn_within +
+    (1 | iso3c),
+  data = df2_sub,
+  REML = FALSE
+)
+
+# M2.5: Pooled Additive Interactions (Model 5) - ALE x each 4-way var independently
+M2.5 <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    children_within + children_between_z +
+    female_within + female_between_z +
+    forborn_within + forborn_between_z +
+    forlang_within + forlang_between_z +
+    #ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    NFE12_within:female_within +
+    NFE12_within:forborn_within +
+    NFE12_within:children_within +
+    NFE12_within:forlang_within +
+    (1 | iso3c),
+  data = df2_sub,
+  REML = FALSE
+)
+```
+
+#### Results
+
+
+```{r}
+
+export_summs(
+  M2.1, M2.2, M2.3, M2.4, M2.5,
+  model.names = c("M2.1 (Immigrants)", "M2.2 (Natives)", "M2.3 (Main Effects)", "M2.4 (ALE x Forborn)", "M2.5 (ALE * 4-vars)"),
+  statistics = "all",
+  error_pos = "right",
+  error_format = "({std.error})",
+  to.file = "docx",
+  file.name = here("Results", "TS1.docx")
+)
+
+```
+
+#### GDP?
+
+The correlation is significant at p <0.1 without the US. The US is kind of a disaster in this figure. GDP may be interesting to further pursue elsewhere, but is not relevant or seemingly confounding to the tests I am running here. 
+
+```{r}
+test <- df2_sub %>%
+    group_by(iso3c) %>%
+    summarise(lit = first(skill_reading), gdp = first(gdppc_k))
+
+test_nousa <- subset(test, iso3c != "USA")
+
+ct <- cor.test(test$gdp, test$lit)
+ctusa <- cor.test(test_nousa$gdp, test_nousa$lit)
+
+lab <- sprintf("r = %.2f, p = %.3f", ct$estimate, ct$p.value)
+labusa <- sprintf("r = %.2f, p = %.3f", ctusa$estimate, ctusa$p.value)
+
+ggplot(test, aes(gdp, lit)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  annotate("text",
+           x = Inf, y = Inf,
+           label = lab,
+           hjust = 1.1, vjust = 1.5)
+
+# without the US
+ggplot(test_nousa, aes(gdp, lit)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  annotate("text",
+           x = Inf, y = Inf,
+           label = labusa,
+           hjust = 1.1, vjust = 1.5)
+
+```
+
+
+### ATEs
+
+### Table S2. Interactive GLM
+
+Here we interact all intersectional variables of interest with ALE (NFE12) to see the unique effects if any.
+
+The correlation between foreign-born and foreign-language is not so high as to warrant dropping one.
+
+select(df2, FORBORN, FORLANG) %>% cor(., use = "pairwise.complete.obs")
+          FORBORN   FORLANG
+FORBORN 1.0000000 0.5645113
+FORLANG 0.5645113 1.0000000
+
+```{r}
+m4 <- lmer(
+  skill_reading ~ 
+    NFE12_within + NFE12_between_z +
+    female_within + female_between_z + 
+    children_within + children_between_z +
+    forlang_within + forlang_between_z +
+    forborn_within + forborn_between_z +
+    # interaction with all sub-interactions
+    female_within*forborn_within*children_within*forlang_within*NFE12_within +
+    #ed3_secondary_within + ed3_secondary_between_z +
+    ed3_tertiary_within + ed3_tertiary_between_z +
+    gdppc_k_log +
+    (1 | iso3c),
+  data = subset(df2_sub)
+)
+
+
+export_summs(
+  m4,
+  coefs = c(
+    "(Intercept)" = "(Intercept)",
+    "ALE (within)" = "NFE12_within",
+    "ALE (between)" = "NFE12_between_z",
+    "Female (within)" = "female_within",
+    "Female (between)" = "female_between_z",
+    "Children (within)" = "children_within",
+    "Children (between)" = "children_between_z",
+    "Non-native speaker (within)" = "forlang_within",
+    "Non-native speaker (between)" = "forlang_between_z",
+    "Foreign-born (within)" = "forborn_within",
+    "Foreign-born (between)" = "forborn_between_z",
+    "Tertiary education (within)" = "ed3_tertiary_within",
+    "Tertiary education (between)" = "ed3_tertiary_between_z",
+    "GDP per capita (log k)" = "gdppc_k_log",
+    "Female x Foreign-born (within)" = "female_within:forborn_within",
+    "Female x Children (within)" = "female_within:children_within",
+    "Children x Foreign-born (within)" = "children_within:forborn_within",      
+    "Female x Foreign-language (within)" = "female_within:forlang_within",  
+    "Foreign-language x Foreign-born (within)" = "forlang_within:forborn_within", 
+    "Children x Foreign-language (within)" = "children_within:forlang_within",
+    "ALE x Female (within)" =  "NFE12_within:female_within",        
+    "ALE x Foreign-born (within)" = "NFE12_within:forborn_within",
+    "ALE x Children (within)" = "NFE12_within:children_within",                 
+    "ALE x Foreign-language (within)" = "NFE12_within:forlang_within",    
+    "Female x Children x Foreign-born" = "female_within:children_within:forborn_within",  
+    "Female x Foreign-language x Foreign-born (within)" = "female_within:forlang_within:forborn_within",  
+    "Female x Children x Foreign-language (within)" = "female_within:children_within:forlang_within",
+    "Children x Foreign-language x Foreign-born (within)" = "children_within:forlang_within:forborn_within",
+    "ALE x Female x Foreign-born (within)" = "NFE12_within:female_within:forborn_within", 
+    "ALE x Female x Children (within)" = "NFE12_within:female_within:children_within",
+    "ALE x Children x Foreign-born (within)" = "NFE12_within:children_within:forborn_within",  
+    "ALE x Female x Foreign-language (within)" = "NFE12_within:female_within:forlang_within",  
+    "ALE x Foreign-language x Foreign-born (within)" = "NFE12_within:forlang_within:forborn_within",
+    "ALE x Children x Foreign-language (within)" = "NFE12_within:children_within:forlang_within",
+    "Female x Children x Foreign-language x Foreign-born (within)" = "female_within:children_within:forlang_within:forborn_within", 
+    "ALE x Female x Children x Foreign-born (within)" = "NFE12_within:female_within:children_within:forborn_within",    
+    "ALE x Female x Foreign-language x Foreign-born (within)" = "NFE12_within:female_within:forlang_within:forborn_within",
+    "ALE x Female x Children x Foreign-language (within)" = "NFE12_within:female_within:children_within:forlang_within",   
+    "ALE x Children x Foreign-language x Foreign-born" = "NFE12_within:children_within:forlang_within:forborn_within",
+    "ALE x Female x Children x Foreign-language x Foreign-born" = "NFE12_within:female_within:children_within:forlang_within:forborn_within"
+  ),
+  statistics = "all", 
+  error_pos = "right", 
+  error_format = "({std.error})", # Formats the S.E. column (e.g., with parentheses)
+  to.file = "docx",
+  file.name = here("Results", "TS2.docx")
+)
+
+include_graphics(here("Results", "TS2.docx"))
+
+# for 3-digit r-squared
+#summ(m4, digits = 3)
+```
+
+#### Predictions
+
+```{r}
+
+df2r <- subset(df2_sub, !is.na(female) & !is.na(NFE12) & !is.na(children_within) & !is.na(forborn_within) & !is.na(forlang_within) & !is.na(ed3) & !is.na(gdppc) & !is.na(skill_reading))
+
+# Calculate grand means. This is necessary because of the centering. The between effect would otherwise create artifact effects because there are more or less immigrants (or whatever group) in a country
+
+gm_female <- mean(df2r$female_between, na.rm = TRUE)
+gm_forborn <- mean(df2r$forborn_between, na.rm = TRUE)
+gm_children <- mean(df2r$children_between, na.rm = TRUE)
+gm_forlang <- mean(df2r$forlang_between, na.rm = TRUE)
+gm_nfe12 <- mean(df2r$NFE12_between, na.rm = TRUE)
+
+#Type 1: Foreign-born parent, non-native speaker
+df_type10 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type11 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+df_type10m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type11m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+
+#Type 2: Foreign-born no children, non-native speaker
+df_type20 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type21 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+df_type20m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type21m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 1 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+
+#Type 3: Foreign-born parent, native speaker
+df_type30 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type31 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+df_type30m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type31m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+
+#Type 4: Foreign-born no children, native speaker
+df_type40 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type41 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+df_type40m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type41m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 1 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+
+#Type 5: Native-born parent, native speaker
+df_type50 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 0 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type51 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 0 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+df_type50m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 0 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type51m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 0 - gm_forborn, children_within = 1 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+
+#Type 6: Native-born no children, native speaker
+df_type60 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 0 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type61 <- df2r %>% mutate(female_within = 1 - gm_female, forborn_within = 0 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+df_type60m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 0 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 0 - gm_nfe12)
+df_type61m <- df2r %>% mutate(female_within = 0 - gm_female, forborn_within = 0 - gm_forborn, children_within = 0 - gm_children, forlang_within = 0 - gm_forlang, NFE12_within = 1 - gm_nfe12)
+
+# make predictions
+
+pred10 <- predict(m4, newdata = df_type10, re.form = NA)
+pred11 <- predict(m4, newdata = df_type11, re.form = NA)
+pred10m <- predict(m4, newdata = df_type10m, re.form = NA)
+pred11m <- predict(m4, newdata = df_type11m, re.form = NA)
+pred20 <- predict(m4, newdata = df_type20, re.form = NA)
+pred21 <- predict(m4, newdata = df_type21, re.form = NA)
+pred20m <- predict(m4, newdata = df_type20m, re.form = NA)
+pred21m <- predict(m4, newdata = df_type21m, re.form = NA)
+pred30 <- predict(m4, newdata = df_type30, re.form = NA)
+pred31 <- predict(m4, newdata = df_type31, re.form = NA)
+pred30m <- predict(m4, newdata = df_type30m, re.form = NA)
+pred31m <- predict(m4, newdata = df_type31m, re.form = NA)
+pred40 <- predict(m4, newdata = df_type40, re.form = NA)
+pred41 <- predict(m4, newdata = df_type41, re.form = NA)
+pred40m <- predict(m4, newdata = df_type40m, re.form = NA)
+pred41m <- predict(m4, newdata = df_type41m, re.form = NA)
+pred50 <- predict(m4, newdata = df_type50, re.form = NA)
+pred51 <- predict(m4, newdata = df_type51, re.form = NA)
+pred50m <- predict(m4, newdata = df_type50m, re.form = NA)
+pred51m <- predict(m4, newdata = df_type51m, re.form = NA)
+pred60 <- predict(m4, newdata = df_type60, re.form = NA)
+pred61 <- predict(m4, newdata = df_type61, re.form = NA)
+pred60m <- predict(m4, newdata = df_type60m, re.form = NA)
+pred61m <- predict(m4, newdata = df_type61m, re.form = NA)
+
+
+# Calculate average marginal effect
+
+diff1 <- pred10 - pred11
+diff2 <- pred20 - pred21
+diff3 <- pred30 - pred31
+diff4 <- pred40 - pred41
+diff5 <- pred50 - pred51
+diff6 <- pred60 - pred61
+
+diff1m <- pred10m - pred11m
+diff2m <- pred20m - pred21m
+diff3m <- pred30m - pred31m
+diff4m <- pred40m - pred41m
+diff5m <- pred50m - pred51m
+diff6m <- pred60m - pred61m
+
+
+
+
+AME1 <- mean(diff1)
+ttest1 <- t.test(pred11, pred10, paired = FALSE)
+AME2 <- mean(diff2)
+ttest2 <- t.test(pred21, pred20, paired = FALSE)
+AME3 <- mean(diff3)
+ttest3 <- t.test(pred31, pred30, paired = FALSE)
+AME4 <- mean(diff4)
+ttest4 <- t.test(pred41, pred40, paired = FALSE)
+AME5 <- mean(diff5)
+ttest5 <- t.test(pred51, pred50, paired = FALSE)
+AME6 <- mean(diff6)
+ttest6 <- t.test(pred61, pred60, paired = FALSE)
+
+AME1m <- mean(diff1m)
+ttest1m <- t.test(pred11m, pred10m, paired = FALSE)
+AME2m <- mean(diff2m)
+ttest2m <- t.test(pred21m, pred20m, paired = FALSE)
+AME3m <- mean(diff3m)
+ttest3m <- t.test(pred31m, pred30m, paired = FALSE)
+AME4m <- mean(diff4m)
+ttest4m <- t.test(pred41m, pred40m, paired = FALSE)
+AME5m <- mean(diff5m)
+ttest5m <- t.test(pred51m, pred50m, paired = FALSE)
+AME6m <- mean(diff6m)
+ttest6m <- t.test(pred61m, pred60m, paired = FALSE)
+
+
+```
+
+
+#### Plot
+
+##### Combine values
+
+```{r}
+
+
+
+ame_df <- data.frame(
+  type = c(
+    "1f. Foreign-born mother\nnon-native speaker",
+    "2f. Foreign-born no children female\nnon-native speaker",
+    "3f. Foreign-born mother\nnative speaker",
+    "4f. Foreign-born no children female\nnative speaker",
+    "5f. Native-born mother\nnative speaker",
+    "6f. Native-born no children female\nnative speaker"
+  ),
+  AME = c(AME1, AME2, AME3, AME4, AME5, AME6),
+  lower = c(ttest1$conf.int[1], ttest2$conf.int[1], ttest3$conf.int[1],
+            ttest4$conf.int[1], ttest5$conf.int[1], ttest6$conf.int[1]),
+  upper = c(ttest1$conf.int[2], ttest2$conf.int[2], ttest3$conf.int[2],
+            ttest4$conf.int[2], ttest5$conf.int[2], ttest6$conf.int[2])
+)
+
+ame_df <- ame_df %>%
+  mutate(
+    AME = -AME,
+    lower = lower,
+    upper = upper
+  )
+
+ame_dfm <- data.frame(
+  type = c(
+    "1m. Foreign-born father\nnon-native speaker",
+    "2m. Foreign-born no children male\nnon-native speaker",
+    "3m. Foreign-born father\nnative speaker",
+    "4m. Foreign-born no children male\nnative speaker",
+    "5m. Native-born father\nnative speaker",
+    "6m. Native-born no children male\nnative speaker"
+  ),
+  AME = c(AME1m, AME2m, AME3m, AME4m, AME5m, AME6m),
+  lower = c(ttest1m$conf.int[1], ttest2m$conf.int[1], ttest3m$conf.int[1],
+            ttest4m$conf.int[1], ttest5m$conf.int[1], ttest6m$conf.int[1]),
+  upper = c(ttest1m$conf.int[2], ttest2m$conf.int[2], ttest3m$conf.int[2],
+            ttest4m$conf.int[2], ttest5m$conf.int[2], ttest6m$conf.int[2])
+)
+
+ame_dfm <- ame_dfm %>%
+  mutate(
+    AME = -AME,
+    lower = lower,
+    upper = upper
+  )
+
+ame_all <- bind_rows(
+  ame_df  %>% mutate(sex = "f"),
+  ame_dfm %>% mutate(sex = "m")
+)
+
+
+ame_all <- ame_all %>%
+  mutate(type = factor(type, levels = rev(type)))
+
+pal12 <- viridis(n = nlevels(ame_all$type), option = "D", begin = 0.1, end = 0.9)
+
+# extract numeric prefix (1–6) and sex (f/m)
+ame_all <- ame_all %>%
+  mutate(
+    idx = as.integer(substr(type, 1, 1)),
+    sex = ifelse(grepl("^\\dm\\.", type), "m", "f")
+  )
+
+# build desired order: 1f,1m,2f,2m,...
+type_order <- ame_all %>%
+  distinct(type, idx, sex) %>%
+  arrange(idx, sex) %>%          # f comes before m alphabetically
+  pull(type)
+
+# apply order (reverse because coord_flip)
+ame_all$type <- factor(ame_all$type, levels = rev(type_order))
+
+```
+
+##### Fig 1 Old Style orig CIs
+
+```{r}
+
+agg_png(here("Results", "Fig1.png"), res = 144, height = 750, width = 750)
+
+ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.55, color = "black") +              # thinner bars
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +                    # 12 viridis colors
+  labs(
+    x = NULL,
+    y = "Average Treatment Effect\nof Participation in ALE",
+    fill = "Type"
+  ) +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y  = element_text(hjust = 1, size = 8),
+    axis.text.x  = element_text(size = 8),
+    axis.title.x = element_text(size = 8),
+    legend.position = "none"
+  )
+
+dev.off()
+
+include_graphics(here("Results", "Fig1.png"))
+```
+### Fig 2. ATEs, circle labels
+
+
+```{r}
+
+
+
+ame_all <- bind_rows(
+  ame_df  %>% mutate(sex = "f"),
+  ame_dfm %>% mutate(sex = "m")
+) %>%
+  mutate(
+    idx = as.integer(substr(type, 1, 1)),
+    sex = ifelse(grepl("^\\dm\\.", type), "m", "f")
+  )
+
+
+type_order <- ame_all %>%
+  distinct(type, idx, sex) %>%
+  arrange(idx, sex) %>%
+  pull(type)
+
+ame_all <- ame_all %>%
+  mutate(
+    type = factor(type, levels = rev(type_order))  # reverse for top-to-bottom display
+  )
+
+# Add binary indicators for the dot matrix
+
+ame_all <- ame_all %>%
+  mutate(
+    Female = ifelse(sex == "f", 1, 0),
+    `Foreign-born` = case_when(
+      idx %in% c(1, 2, 3, 4) ~ 1,
+      idx %in% c(5, 6) ~ 0
+    ),
+    `Non-native-speaker` = case_when(
+      idx %in% c(1, 2) ~ 1,
+      idx %in% c(3, 4, 5, 6) ~ 0
+    ),
+    Parent = case_when(
+      idx %in% c(1, 3, 5) ~ 1,
+      idx %in% c(2, 4, 6) ~ 0
+    )
+  )
+
+# Convert for dots
+
+dot_df <- ame_all %>%
+  select(type, Female, `Foreign-born`, `Non-native-speaker`, Parent) %>%
+  pivot_longer(
+    cols = c(Female, `Foreign-born`, `Non-native-speaker`, Parent),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(
+    variable = factor(
+      variable,
+      levels = c("Female", "Foreign-born", "Non-native-speaker", "Parent")
+    )
+  )
+
+# New labelling with dots in a matrix
+
+p_dots <- ggplot(dot_df, aes(x = variable, y = type)) +
+  geom_point(
+    data = subset(dot_df, value == 0),
+    shape = 21,
+    size = 3.2,
+    stroke = 0.5,
+    fill = "white",
+    color = "black"
+  ) +
+  geom_point(
+    data = subset(dot_df, value == 1),
+    shape = 16,
+    size = 3.2,
+    color = "black"
+  ) +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1)
+  )
+
+
+p_bar <- ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.55, color = "black") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +
+  scale_y_continuous(breaks = seq(0, 60, by = 5)) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Average Treatment Effect\nof Participation in ALE"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "none"
+  )
+
+# Coombine panels
+
+#p_final <- p_dots + p_bar +
+#  plot_layout(widths = c(1.1, 2.4))
+
+agg_png(here("Results", "Fig1_dotmatrix.png"), res = 144, height = 750, width = 1100)
+
+ggarrange(
+  p_dots,
+  p_bar,
+  ncol = 2,
+  widths = c(1.1, 2.4),
+  align = "h"
+)
+
+dev.off()
+
+include_graphics(here("Results", "Fig1_dotmatrix.png"))
+
+```
+
+
+##### Adjust CIs
+
+The confidence intervals here refer to the entire sample across 26 countries. To make them more realistic to a treatment in one country, we adjust them down to a sample of 5,700 which is the average sample size per country.
+
+```{r}
+
+# Function to adjust CI to a new sample size (e.g., average country = 5700)
+adjust_ci <- function(ttest_obj, new_n = 5700) {
+  mean_diff <- ttest_obj$estimate[1] - ttest_obj$estimate[2]
+  pooled_sd <- sqrt(((ttest_obj$parameter + 1) * ttest_obj$stderr^2))  # back-calculate SD
+  se_new <- pooled_sd / sqrt(new_n)
+  ci_margin <- qt(0.975, df = new_n - 1) * se_new
+  lower <- mean_diff - ci_margin
+  upper <- mean_diff + ci_margin
+  return(c(lower, upper))
+}
+
+# Apply adjusted CI to each t-test result
+ci1 <- adjust_ci(ttest1)
+ci2 <- adjust_ci(ttest2)
+ci3 <- adjust_ci(ttest3)
+ci4 <- adjust_ci(ttest4)
+ci5 <- adjust_ci(ttest5)
+ci6 <- adjust_ci(ttest6)
+
+ci1m <- adjust_ci(ttest1m)
+ci2m <- adjust_ci(ttest2m)
+ci3m <- adjust_ci(ttest3m)
+ci4m <- adjust_ci(ttest4m)
+ci5m <- adjust_ci(ttest5m)
+ci6m <- adjust_ci(ttest6m)
+
+# add single country CIs 'sCIs'
+ame_all <- ame_all %>%
+  mutate(upper_sCI = c(ci1[2], ci2[2], ci3[2], ci4[2], ci5[2], ci6[2], ci1m[2], ci2m[2], ci3m[2], ci4m[2], ci5m[2], ci6m[2]),  
+         lower_sCI = c(ci1[1], ci2[1], ci3[1], ci4[1], ci5[1], ci6[1], ci1m[1], ci2m[1], ci3m[1], ci4m[1], ci5m[1], ci6m[1])   
+)
+
+
+```
+
+
+##### Fig 2 new CIs
+
+Makes no difference
+
+
+```{r}
+
+agg_png(here("Results", "Fig1_sCI.png"), res = 144, height = 750, width = 750)
+
+ggplot(ame_all, aes(x = type, y = AME, fill = type)) +
+  geom_col(width = 0.55, color = "black") +              # thinner bars
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.15) +
+  scale_fill_manual(values = pal12) +                    # 12 viridis colors
+  labs(
+    x = NULL,
+    y = "Average Treatment Effect\nof Participation in ALE",
+    fill = "Type"
+  ) +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.y  = element_text(hjust = 1, size = 8),
+    axis.text.x  = element_text(size = 8),
+    axis.title.x = element_text(size = 8),
+    legend.position = "none"
+  )
+
+dev.off()
+
+include_graphics(here("Results", "Fig1_sCI.png"))
+
+
+```
+
+
+
+### Population Predictions
+
+
+#### Predictions
+
+Many ideas supported by interactions with ChatGPT and Google Gemini
+
+```{r}
+# Get variable names as vectors
+vars_raw    <- c("female", "FORBORN", "FORLANG", "children")
+vars_within <- c("female_within", "forborn_within", "forlang_within", "children_within")
+vars_between <- c("female_between", "forborn_between", "forlang_between", "children_between")
+
+# Map within/between names used in the df
+map_within <- c(female="female_within", FORBORN="forborn_within", FORLANG="forlang_within", children="children_within")
+map_between <- c(female="female_between", FORBORN="forborn_between", FORLANG="forlang_between", children="children_between")
+
+# Build counterfactual newdata for predict(m4) consistent with within/between coding
+make_newdata_for_m4 <- function(df_base, spec, nfe_value) {
+  stopifnot(all(names(spec) %in% vars_raw))
+  nd <- df_base
+
+  # Set NFE12 within directly to 0/1  (this is "within", so this is a strong intervention).
+
+  nd$NFE12_within <- nfe_value - nd$NFE12_between
+
+  # For each targeting var: if spec is 0/1, set within = target - between; else leave as observed (population mix).
+  for (v in vars_raw) {
+    target <- spec[[v]]
+    if (!is.na(target)) {
+      w <- map_within[[v]]
+      b <- map_between[[v]]
+      nd[[w]] <- target - nd[[b]]
+    }
+  }
+
+  nd
+}
+
+# Compute AME for a spec: E[pred(NFE=1) - pred(NFE=0)] (weighted)
+calc_ame_spec <- function(model_m4, df_base, spec, weight_var="aweight") {
+  nd0 <- make_newdata_for_m4(df_base, spec, nfe_value = 0)
+  nd1 <- make_newdata_for_m4(df_base, spec, nfe_value = 1)
+
+  p0 <- predict(model_m4, newdata = nd0, re.form = NA)
+  p1 <- predict(model_m4, newdata = nd1, re.form = NA)
+
+  d  <- p1 - p0  # gain from ALE
+
+  w <- df_base[[weight_var]]
+  ok <- is.finite(d) & is.finite(w) & !is.na(w) & w > 0
+  d <- d[ok]; w <- w[ok]
+
+  ame <- weighted.mean(d, w)
+
+  # Simple weighted SE (design-based would be better; this is a pragmatic approximation)
+  se  <- sqrt( sum(w^2 * (d - ame)^2) / (sum(w)^2) )
+  ci  <- ame + c(-1, 1) * 1.96 * se
+
+  list(AME = ame, SE = se, lower = ci[1], upper = ci[2])
+}
+
+# Identify who is "in the targeted group" given a spec (raw vars and then NA means ignore)
+in_group <- function(df, spec) {
+  idx <- rep(TRUE, nrow(df))
+  for (v in vars_raw) {
+    target <- spec[[v]]
+    if (!is.na(target)) idx <- idx & (df[[v]] == target)
+  }
+  idx
+}
+
+# Population gain per country from targeting spec:
+# Boost skill_reading by AME for those in group AND NFE12==0, then take weighted mean difference.
+# Population gain per country from targeting spec
+calc_country_gains <- function(df2_full, spec, AME, ctx_data, weight_var="aweight") {
+  
+  df <- df2_full %>% 
+    left_join(ctx_data, by = "iso3c") %>% 
+    mutate(context_effect = replace_na(context_effect, 0))
+  
+  g  <- in_group(df, spec)
+  g[is.na(g)] <- FALSE
+  
+  treatable <- g & df$NFE12 == 0 & !is.na(df$skill_reading)
+  treatable[is.na(treatable)] <- FALSE
+  
+  df <- df %>%
+    mutate(
+      net_effect  = pmax(0, AME + context_effect),
+      skill_boost = ifelse(treatable, skill_reading + net_effect, skill_reading),
+      g_total     = ifelse(g, 1, 0),
+      g_noale     = ifelse(g & NFE12 == 0, 1, 0)
+    )
+  
+  df$g_noale[is.na(df$g_noale)] <- 0
+  
+  out <- df %>%
+    filter(!is.na(iso3c)) %>%
+    group_by(iso3c) %>%
+    summarise(
+      skill_base  = weighted.mean(skill_reading, .data[[weight_var]], na.rm = TRUE),
+      skill_gain  = weighted.mean(skill_boost,   .data[[weight_var]], na.rm = TRUE) - skill_base,
+      pct_group   = weighted.mean(g_total, .data[[weight_var]], na.rm = TRUE),
+      pct_group_noale = weighted.mean(g_noale, .data[[weight_var]], na.rm = TRUE),
+      group_skill_base = weighted.mean(skill_reading[g], .data[[weight_var]][g], na.rm = TRUE),
+      pop18to65 = sum(SPFWT0, na.rm = TRUE),
+      context_effect = first(context_effect),
+      .groups = "drop"
+    )
+  
+  out
+}
+
+
+```
+
+#### Create all specifications
+
+```{r}
+
+
+make_all_specs <- function(vars = vars_raw) {
+  # all subsets except empty
+  subsets <- unlist(lapply(1:length(vars), function(k) combn(vars, k, simplify = FALSE)), recursive = FALSE)
+
+  specs <- map_dfr(subsets, function(active) {
+    grid <- expand.grid(rep(list(c(0,1)), length(active)))
+    colnames(grid) <- active
+    # inactive vars are NA ("all")
+    for (v in setdiff(vars, active)) grid[[v]] <- NA_integer_
+    grid %>% select(all_of(vars))
+  })
+
+  specs %>%
+    mutate(
+      spec_id = row_number(),
+      spec_label = pmap_chr(across(all_of(vars)), function(female, FORBORN, FORLANG, children) {
+        lab1 <- if (is.na(female))   "female=all"   else paste0("female=", female)
+        lab2 <- if (is.na(FORBORN))  "FORBORN=all"  else paste0("FORBORN=", FORBORN)
+        lab3 <- if (is.na(FORLANG))  "FORLANG=all"  else paste0("FORLANG=", FORLANG)
+        lab4 <- if (is.na(children)) "children=all" else paste0("children=", children)
+        paste(lab1, lab2, lab3, lab4, sep="; ")
+      })
+    )
+}
+
+specs_all <- make_all_specs()
+nrow(specs_all)  # 80
+```
+
+
+## Citations
+
+```{r}
+
+packages %>%
+  map(citation) %>%
+  print(style = "text")
+
+```
+
+
+## Colophon
+
+```{r}
+
+sessionInfo()
+
+```
+
+
+

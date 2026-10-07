@@ -28,10 +28,8 @@ output:
 **Method.** All statistics describe the analysis sample (adults not in
 formal education with valid values on every model variable), so that the
 descriptives and the models refer to the same people. Means and percentages
-use the final weight `SPFWT0`, rescaled so that every country has the same
-total weight ("senate weights"). Within a country, results are
-representative of its adult population; pooled results give each country
-the same influence, whatever its size, matching the models in 03–05. Standard errors use the replicate weights with
+use the final weight `SPFWT0`, so pooled results describe the combined adult
+population of the countries. Standard errors use the replicate weights with
 each country's own replication method, and the ten plausible values are
 combined with Rubin's rules. The functions that do this are in
 `R/functions_descriptives.R`, which also documents the method.
@@ -99,7 +97,7 @@ write_csv(table_a1, here("Results", "Table_A1.csv"))
 
 table_a1 %>%
   kable(format = "html", digits = 2, format.args = list(big.mark = ","),
-        caption = "Table A1. Analysis sample, PIAAC Cycle 2. wmean uses the final weight SPFWT0 with each country weighted equally.") %>%
+        caption = "Table A1. Analysis sample, PIAAC Cycle 2. wmean uses the final weight SPFWT0.") %>%
   kable_styling(full_width = FALSE) %>%
   save_kable(here("Results", "Table_A1.html"))
 
@@ -286,15 +284,13 @@ include_graphics(here("Results", "Fig_S2.png"))
 ## Supplementary Table S3. The 16 intersectional groups
 
 The bottom row of Figure 1 as a table, with the group's share of the
-sample (unweighted) and of the population (weighted, each country counting
-equally).
+sample (unweighted) and of the population (weighted).
 
 ```{r table_s3}
 group_share <- dfa %>%
-  mutate(w = SPFWT0 / ave(SPFWT0, iso3c, FUN = sum)) %>%
   group_by(group16) %>%
   summarise(pct_sample = 100 * n() / nrow(dfa),
-            pct_population = 100 * sum(w) / n_distinct(dfa$iso3c))
+            pct_population = 100 * sum(SPFWT0) / sum(dfa$SPFWT0))
 
 table_s3 <- trees$all %>%
   filter(depth == 4) %>%

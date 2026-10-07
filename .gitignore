@@ -7,3 +7,10 @@
 /Data/df.RDS
 /Data/df2.RDS
 /Data/df2_sub.RDS
+/logs/
+/paper/
+/Data/cycle2csvs/
+/Data/models_03.rds
+/Data/piaac_cycle2.rds
+/Data/piaac_cycle1_lit.rds
+/_staging_tmp/

@@ -174,14 +174,6 @@ The analysis uses adults who are not in formal education and have valid
 values on every model variable. The table shows how many cases each step
 removes.
 
-Age is a control in the models: the 10-year age group `age10`, from
-`AGEG10LFS` (1 = 16–24, 2 = 25–34, 3 = 35–44, 4 = 45–54, 5 = 55–65), the
-only age variable in the public-use files of Sweden and Norway. It is
-missing for some respondents in these two countries (see the table below);
-they are kept, with "missing" as an extra age category in the models,
-because they differ from the rest (many are foreign-born, with lower
-literacy), so dropping them would bias the results for these countries.
-
 ```{r sample}
 model_vars <- c("skill_reading", "NFE12", "female", "FORBORN", "FORLANG",
                 "children", "ed3")
@@ -202,15 +194,6 @@ sample_flow <- tibble(
                 n_distinct(df2$iso3c[df2$in_sample == 1])))
 
 kable(sample_flow)
-
-# respondents in the analysis sample without an age group, by country
-df2 %>%
-  filter(in_sample == 1) %>%
-  group_by(iso3c) %>%
-  summarise(n = n(), age_missing = sum(is.na(age10)),
-            pct_age_missing = 100 * mean(is.na(age10))) %>%
-  filter(age_missing > 0) %>%
-  kable(digits = 1)
 ```
 
 Missing values by country (percent of respondents). Denmark's public-use

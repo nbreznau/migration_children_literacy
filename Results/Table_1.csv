@@ -1,0 +1,10 @@
+Group,Scenario,"% of population treated, X","% of population treated, Y","Change in population literacy, treating X","Change in population literacy, treating Y",Difference (X minus Y),Countries where X gains more
+"A. X: Foreign-born, non-native speaker, mother / Y: Native-born, native speaker, mother",Strict parity,1.03,1.03,0.27,0.16,0.11,29 of 29
+"A. X: Foreign-born, non-native speaker, mother / Y: Native-born, native speaker, mother",Limited reach,0.52,1.03,0.14,0.16,-0.02,10 of 29
+"A. X: Foreign-born, non-native speaker, mother / Y: Native-born, native speaker, mother",Blank check,1.55,13.38,0.41,1.75,-1.34,2 of 29
+"B. X: Foreign-born, non-native speaker, man without children / Y: Native-born, native speaker, man without children",Strict parity,0.34,0.34,0.09,0.07,0.02,29 of 29
+"B. X: Foreign-born, non-native speaker, man without children / Y: Native-born, native speaker, man without children",Limited reach,0.17,0.34,0.05,0.07,-0.02,1 of 29
+"B. X: Foreign-born, non-native speaker, man without children / Y: Native-born, native speaker, man without children",Blank check,0.52,7,0.14,1.25,-1.11,0 of 29
+"C. X: Foreign-born, non-native speaker, man without children, no tertiary degree / Y: Native-born, native speaker, mother, tertiary degree",Strict parity,0.23,0.23,0.08,0.03,0.05,28 of 29
+"C. X: Foreign-born, non-native speaker, man without children, no tertiary degree / Y: Native-born, native speaker, mother, tertiary degree",Limited reach,0.11,0.23,0.04,0.03,0.01,27 of 29
+"C. X: Foreign-born, non-native speaker, man without children, no tertiary degree / Y: Native-born, native speaker, mother, tertiary degree",Blank check,0.34,3.81,0.12,0.37,-0.26,5 of 29

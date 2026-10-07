@@ -1,0 +1,244 @@
+---
+title: "06 Simulated interventions (Table 1)"
+subtitle: "The 'Immigration Issue' Misnomer in Human Capital Research: Intersectional Inequalities in Adult Education and Literacy"
+author: "Author omitted for blind peer review"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+always_allow_html: true
+---
+
+**What this script does.** It reproduces the simulator app's three
+intervention scenarios for three fixed pairs of target groups (X and Y)
+and reports the results as Table 1 of the main text.
+
+| Output file (in `Results/`) | Paper |
+|---|---|
+| `Table_1.docx/.csv` | Table 1 (simulated gains, 3 group pairs x 3 scenarios) |
+| `Table_1_data.csv` | Country values behind the table |
+
+**Input.** `Shiny/precomp_spec_country.rds` from 04 (the same file the app
+reads), so the table and the app always agree.
+
+**The scenarios** (as in the app, `Shiny/app.R`). Each treats a share of
+the group's members who had no ALE in the last 12 months:
+
+- *Strict parity*: 50% of the untreated in X; in Y the same number of
+  people (as a share of the population), or all of Y's untreated if Y has
+  fewer.
+- *Limited reach*: 25% of the untreated in X; in Y up to
+  `limited_multiplier` times that number of people (set below; the app
+  uses 1.5).
+- *Blank check*: 75% of the untreated in each group, no limit.
+
+The gain is the rise in the country's average literacy, in points, when
+the treated get the group's effect of ALE (M5) plus the country's own
+deviation in the ALE slope ("context effect", as with the app's default
+setting), floored at zero.
+
+## Setup
+
+```{r setup, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+library(here)
+source(here("R", "load_packages.R"))
+
+packages <- c("tidyverse", "here", "knitr", "flextable")
+load_packages(packages)
+
+precomp <- read_rds(here("Shiny", "precomp_spec_country.rds"))
+
+# TRUE = include each country's context effect (the app's default)
+use_context <- TRUE
+
+# Limited reach: Y may treat this many times as many people as X. The app
+# uses 1.5; 2 splits the countries of pair A about evenly (see the
+# break-even table at the end).
+limited_multiplier <- 2
+```
+
+## Group pairs
+
+A group is given as in the app: 1 = yes, 0 = no, `NA` = both.
+
+- A: foreign-born non-native-speaking mothers vs native-born
+  native-speaking mothers (both education levels).
+- B: the same comparison for men without children.
+- C: the group with the largest effect of ALE in M5 vs the group with the
+  smallest, among the fully specified groups of Figure 3 (native-born
+  non-native speakers are left out there, as too few per country).
+
+```{r groups}
+make_spec_id <- function(female = NA, FORBORN = NA, FORLANG = NA,
+                         children = NA, ed3_tertiary = NA) {
+  v <- function(x) ifelse(is.na(x), "all", x)
+  sprintf("f=%s;b=%s;l=%s;c=%s;e=%s", v(female), v(FORBORN), v(FORLANG),
+          v(children), v(ed3_tertiary))
+}
+
+# describe a spec_id in words
+spec_label <- function(id) {
+  x <- setNames(sub(".*=", "", strsplit(id, ";")[[1]]), c("f", "b", "l", "c", "e"))
+  pick <- function(v, yes, no) switch(v, "1" = yes, "0" = no, NULL)
+  parent <- if (x["c"] == "all") NULL else
+    if (x["f"] == "1") pick(x["c"], "mother", "woman without children") else
+    if (x["f"] == "0") pick(x["c"], "father", "man without children") else
+    pick(x["c"], "parent", "no children")
+  paste(c(pick(x["b"], "Foreign-born", "Native-born"),
+          pick(x["l"], "non-native speaker", "native speaker"),
+          if (is.null(parent)) pick(x["f"], "female", "male") else parent,
+          pick(x["e"], "tertiary degree", "no tertiary degree")),
+        collapse = ", ")
+}
+
+# effect of ALE (M5) for every fully specified group in Figure 3
+full_groups <- precomp %>%
+  filter(!grepl("all", spec_id), !grepl("b=0;l=1", spec_id)) %>%
+  group_by(spec_id) %>%
+  summarise(AME = first(AME), SE = first(SE),
+            pct_population = 100 * mean(pct_group), .groups = "drop") %>%
+  arrange(desc(AME))
+kable(full_groups, digits = 2)
+
+pairs <- tribble(
+  ~group, ~x_id, ~y_id,
+  "A", make_spec_id(female = 1, FORBORN = 1, FORLANG = 1, children = 1),
+       make_spec_id(female = 1, FORBORN = 0, FORLANG = 0, children = 1),
+  "B", make_spec_id(female = 0, FORBORN = 1, FORLANG = 1, children = 0),
+       make_spec_id(female = 0, FORBORN = 0, FORLANG = 0, children = 0),
+  "C", first(full_groups$spec_id), last(full_groups$spec_id)) %>%
+  mutate(x_label = map_chr(x_id, spec_label),
+         y_label = map_chr(y_id, spec_label))
+
+kable(pairs)
+```
+
+## Simulation
+
+```{r simulate}
+scenarios <- tribble(
+  ~scenario,        ~frac_x, ~y_rule,
+  "Strict parity",  0.50,    "match",
+  "Limited reach",  0.25,    "match_k",
+  "Blank check",    0.75,    "same_share")
+
+group_values <- function(id, suffix) {
+  precomp %>%
+    filter(spec_id == id) %>%
+    transmute(iso3c,
+              ATE = AME,
+              gain_all = if (use_context) skill_gain_ctx else skill_gain_base,
+              pct_group, pct_noale = pct_group_noale) %>%
+    rename_with(~ paste0(.x, suffix), -iso3c)
+}
+
+simulate_pair <- function(x_id, y_id) {
+  left_join(group_values(x_id, "_X"), group_values(y_id, "_Y"), by = "iso3c") %>%
+    crossing(scenarios) %>%
+    mutate(
+      treated_share_X = pct_noale_X * frac_x,
+      frac_y = case_when(
+        y_rule == "same_share" ~ frac_x,
+        pct_noale_Y <= 0       ~ 0,
+        y_rule == "match"      ~ pmin(1, treated_share_X / pct_noale_Y),
+        y_rule == "match_k"    ~ pmin(1, limited_multiplier * treated_share_X / pct_noale_Y)),
+      treated_share_Y = pct_noale_Y * frac_y,
+      # gain_all_* is the gain if every untreated member is treated, so a
+      # share of them gives that share of the gain
+      gain_X = gain_all_X * frac_x,
+      gain_Y = gain_all_Y * frac_y)
+}
+
+sims <- pairs %>%
+  mutate(res = map2(x_id, y_id, simulate_pair)) %>%
+  unnest(res) %>%
+  mutate(scenario = factor(scenario, levels = scenarios$scenario)) %>%
+  arrange(group, scenario, iso3c)
+
+write_csv(sims, here("Results", "Table_1_data.csv"))
+```
+
+## Table 1
+
+The gains are changes in the average literacy of each country's whole
+adult population (not only of the treated group), averaged over countries
+with each country counting equally. The difference shows whether
+targeting X instead of Y raises population literacy more; the last column
+counts the countries where it does.
+
+```{r table1}
+table_1 <- sims %>%
+  group_by(group, x_label, y_label, scenario) %>%
+  summarise(ATE_X = first(ATE_X), ATE_Y = first(ATE_Y),
+            # count before gain_X and gain_Y are replaced by their means
+            countries_X_more = sprintf("%d of %d", sum(gain_X > gain_Y), n()),
+            treated_pct_X = 100 * mean(treated_share_X),
+            treated_pct_Y = 100 * mean(treated_share_Y),
+            gain_X = mean(gain_X), gain_Y = mean(gain_Y),
+            .groups = "drop") %>%
+  mutate(gain_diff = gain_X - gain_Y) %>%
+  mutate(across(c(ATE_X, ATE_Y), ~ round(.x, 1)),
+         across(c(treated_pct_X, treated_pct_Y), ~ round(.x, 2)),
+         across(c(gain_X, gain_Y, gain_diff), ~ round(.x, 2)))
+
+table_1_out <- table_1 %>%
+  transmute(Group = paste0(group, ". X: ", x_label, " / Y: ", y_label),
+            Scenario = scenario,
+            `% of population treated, X` = treated_pct_X,
+            `% of population treated, Y` = treated_pct_Y,
+            `Change in population literacy, treating X` = gain_X,
+            `Change in population literacy, treating Y` = gain_Y,
+            `Difference (X minus Y)` = gain_diff,
+            `Countries where X gains more` = countries_X_more)
+
+write_csv(table_1_out, here("Results", "Table_1.csv"))
+flextable(table_1_out) %>%
+  merge_v(j = "Group") %>%
+  valign(j = "Group", valign = "top") %>%
+  fontsize(size = 8, part = "all") %>%
+  width(j = "Group", width = 2.2) %>%
+  width(j = 2:8, width = 0.8) %>%
+  hline(i = cumsum(rle(table_1_out$Group)$lengths)) %>%
+  set_caption(paste0("Table 1. Simulated change in average population literacy (points) from ALE interventions targeting group X or group Y (limited reach: Y up to ", limited_multiplier, " times as many people as X)")) %>%
+  save_as_docx(path = here("Results", "Table_1.docx"))
+kable(table_1_out)
+
+# effects of ALE for each group (M5), for the table note
+table_1 %>% distinct(group, x_label, ATE_X, y_label, ATE_Y) %>% kable()
+```
+
+### Break-even multiplier
+
+How many times as many people in Y as in X must be treated for Y to raise
+population literacy as much as X (ignoring the limit of Y's untreated)?
+Per country this is the gain per treated person in X divided by that in
+Y; the table gives the median and range over countries. A limited-reach
+multiplier near the median splits the countries about evenly.
+
+```{r breakeven}
+breakeven <- sims %>%
+  filter(scenario == "Strict parity", pct_noale_X > 0, pct_noale_Y > 0,
+         gain_all_Y > 0) %>%
+  mutate(multiplier = (gain_all_X / pct_noale_X) / (gain_all_Y / pct_noale_Y)) %>%
+  group_by(group) %>%
+  summarise(countries = n(), median = median(multiplier),
+            min = min(multiplier), max = max(multiplier), .groups = "drop")
+
+write_csv(breakeven, here("Results", "Table_1_breakeven.csv"))
+kable(breakeven, digits = 2)
+```
+
+## Package citations
+
+```{r citations}
+packages %>% map(citation) %>% print(style = "text")
+```
+
+## Session information
+
+```{r session}
+sessionInfo()
+```
